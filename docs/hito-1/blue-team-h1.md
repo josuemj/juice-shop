@@ -17,9 +17,8 @@
 6. [Requisitos de seguridad](#6-requisitos-de-seguridad)
 7. [Casos de abuso (Dado / Cuando / Entonces)](#7-casos-de-abuso)
 8. [Trazabilidad hacia H2, H3 y H4](#8-trazabilidad-hacia-h2-h3-y-h4)
-9. [Supuestos y preguntas abiertas](#9-supuestos-y-preguntas-abiertas)
+9. [Supuestos](#9-supuestos)
 10. [Referencias](#10-referencias)
-11. [Uso de IA](#11-uso-de-ia)
 
 ---
 
@@ -352,7 +351,7 @@ Las referencias a código apuntan al fork; los números de línea corresponden a
 
 | ID | STRIDE | Amenaza | Evidencia | OWASP 2025 / CWE | Riesgo |
 |---|---|---|---|---|---|
-| T-SPA-01 | I | XSS basado en DOM y reflejado: la SPA marca como HTML confiable el término de búsqueda y otros campos | `frontend/src/app/search-result/search-result.component.ts:146` y `:113`, `track-result/track-result.component.ts:49` | A05 / CWE-79 | Alto |
+| T-SPA-01 | I | XSS basado en DOM (búsqueda) y reflejado (rastreo de pedidos): la SPA marca como HTML confiable el término de búsqueda, el número de pedido y descripciones de productos | `frontend/src/app/search-result/search-result.component.ts:146` y `:113`, `track-result/track-result.component.ts:49`, `routes/trackOrder.ts:15-24` | A05 / CWE-79 | Alto |
 | T-SPA-02 | S | Robo de sesión: el JWT se guarda en `localStorage`, legible por cualquier script inyectado | `frontend/src/app/login/login.component.ts:110` | A07 / CWE-922 | Alto |
 | T-SPA-03 | I | XSS almacenado en vistas de administración (feedback y correos de usuarios renderizados como HTML) | `administration/administration.component.ts:74`, `:92`; `about/about.component.ts:120` | A05 / CWE-79 | Alto |
 | T-SPA-04 | T | Manipulación de peticiones desde el cliente (cantidades, IDs, precios, rol) asumiendo que la UI las valida | Toda la API; la SPA es la única que restringe ciertas acciones | A06 / CWE-602 | Alto |
@@ -518,7 +517,7 @@ Las diez amenazas de mayor riesgo, que guían las PoC del Red Team (H2), las reg
 | 2 | T-CAT-01 SQLi `UNION` en búsqueda | Crítico | Sí (query string) | CRS `942xxx` + regla SIEM "SQLi" | Consulta parametrizada |
 | 3 | T-AUTH-02 / T-AUTH-03 JWT forjado | Crítico | Solo con regla propia | Regla ModSecurity propia para `alg: none` (AC-07) | Clave fuera del código, `algorithms: ['RS256']` |
 | 4 | T-FILE-01 SSTI / RCE en perfil | Crítico | Parcial (`932xxx`, `934xxx`) | Regla SIEM sobre `932xxx`/`934xxx` | Eliminar `eval` y plantillas dinámicas |
-| 5 | T-SPA-01 XSS | Alto | Solo la llamada a la API | CRS `941xxx` + regla SIEM "XSS" | Quitar `bypassSecurityTrustHtml` |
+| 5 | T-SPA-01 XSS | Alto | Sí en el rastreo de pedidos (ruta de la API); **no** en la búsqueda (DOM) | CRS `941xxx` + regla SIEM "XSS" | Quitar `bypassSecurityTrustHtml` |
 | 6 | T-ORD-01 IDOR en carrito | Alto | No | Brecha: requiere log de aplicación | Verificar propietario |
 | 7 | T-AUTH-04 fuerza bruta | Alto | Solo el volumen | Regla SIEM de umbral por IP sobre 401 en `/rest/user/login` | Rate limit y bloqueo progresivo |
 | 8 | T-CFG-01 directorios expuestos | Alto | Sí, pero sin payload | CRS `913xxx` (escáneres) + regla SIEM "escaneo por IP" | Quitar listados y rutas |
@@ -636,7 +635,7 @@ Escenario: un atacante intenta extraer correos y hashes desde la búsqueda de pr
 
 ---
 
-### AC-03 · XSS a través del término de búsqueda
+### AC-03 · XSS reflejado a través del rastreo de pedidos
 
 | Campo | Valor |
 |---|---|
@@ -646,20 +645,25 @@ Escenario: un atacante intenta extraer correos y hashes desde la búsqueda de pr
 | Requisitos | RS-02, RS-15, RS-17, RS-18 |
 
 ```gherkin
-Escenario: un atacante envía a una víctima un enlace de búsqueda con un payload XSS
-  Dado que el WAF está en modo "On"
+Escenario: un atacante envía a una víctima un enlace de rastreo de pedido con un payload XSS
+  Dado que el WAF está en modo "On" con paranoia 1 y umbral de anomalía 5
   Y que la regla "XSS" está activa en Kibana
   Y que una víctima tiene sesión iniciada en la tienda
-  Cuando la víctima abre http://localhost:8080/#/search?q=<iframe src="javascript:alert(`xss`)">
-  Entonces la llamada que la SPA hace a GET /rest/products/search?q=<iframe... es bloqueada con 403
-  Y en filebeat-* existe un evento con reglas 941xxx y la IP de la víctima
-  Y la regla "XSS" genera una alerta
-  Pero el bloqueo de la API no garantiza que el navegador no ejecute el payload,
-    porque el término viaja en el fragmento (#) y la SPA lo inserta en el DOM
-  Y por eso, con el código corregido, el término se muestra como texto y no se ejecuta ningún script
+  Cuando la víctima abre http://localhost:8080/#/track-result?id=<iframe src="javascript:alert(`xss`)">
+  Entonces la SPA llama a GET /rest/track-order/ con el payload codificado en la ruta
+  Y el WAF responde HTTP 403, por lo que la respuesta nunca llega a la SPA y el script no se ejecuta
+  Y en filebeat-* existe un evento con url.original que contiene "/rest/track-order/",
+    al menos una regla 941xxx y la regla 949110
+  Y la regla "XSS" genera una alerta con la IP de la víctima y la hora de la petición
+  Y con el WAF en "DetectionOnly" y el código corregido, el número de pedido se muestra como texto
+    y no se ejecuta ningún script
 ```
 
-**Nota para H3:** este caso demuestra que el WAF es un control **compensatorio y de detección**, no la corrección. El comportamiento exacto con la API bloqueada se documenta en `docs/hito-3/`.
+**Cómo viaja el payload:** el componente toma `id` de la URL (`frontend/src/app/track-result/track-result.component.ts:46`), el servicio lo codifica con `encodeURIComponent` y llama a `/rest/track-order/:id` (`frontend/src/app/Services/track-order.service.ts:20-22`). Si no existe el pedido, la API devuelve el mismo `id` como `orderId` (`routes/trackOrder.ts:15-24`), y la SPA lo inserta como HTML confiable (`track-result.component.ts:49`). Como el payload pasa por el servidor, el WAF lo inspecciona: el CRS decodifica la URL antes de aplicar las reglas 941xxx.
+
+**Línea base esperada:** en `DetectionOnly` y sin corrección, la API devuelve el payload y el navegador ejecuta el `alert`. A confirmar por el Red Team en H2.
+
+**Brecha relacionada, XSS de la búsqueda (`#/search?q=`):** ese payload **no** llega al servidor por HTTP. La SPA pide `/rest/products/search?q=` vacío (`search-result.component.ts:63`), filtra los productos en el navegador e inserta el término en el DOM (`search-result.component.ts:146`). El término solo viaja en el evento de Socket.IO `verifyLocalXssChallenge`, y ModSecurity no inspecciona los mensajes de WebSocket. Por eso ni el WAF ni el SIEM lo detectan, y solo la corrección en el código (RS-02) lo mitiga. Es un ejemplo de que el WAF es un control compensatorio, no la corrección.
 
 ---
 
@@ -770,7 +774,7 @@ Escenario: un atacante fabrica un token de administrador
 |---|---|---|---|---|---|
 | AC-01 SQLi login | T-AUTH-01 | RS-01, RS-15–19 | SAST | CRS 942xxx · regla SQLi | Candidata |
 | AC-02 SQLi UNION | T-CAT-01 | RS-01, RS-05, RS-15, RS-17, RS-18 | SAST, DAST | CRS 942xxx · regla SQLi | Candidata |
-| AC-03 XSS | T-SPA-01 | RS-02, RS-15, RS-17, RS-18 | SAST | CRS 941xxx · regla XSS | Candidata |
+| AC-03 XSS reflejado | T-SPA-01 | RS-02, RS-15, RS-17, RS-18 | SAST | CRS 941xxx · regla XSS (la variante DOM de la búsqueda es una brecha) | Candidata |
 | AC-04 Fuerza bruta | T-AUTH-04 | RS-06, RS-13, RS-17, RS-18 | — | Regla de umbral por IP | Opcional |
 | AC-05 Reconocimiento | T-CFG-01, T-FS-01 | RS-11, RS-15, RS-18, RS-23 | DAST | CRS 913xxx · regla de escaneo | Opcional |
 | AC-06 IDOR | T-ORD-01 | RS-03, RS-13, RS-23 | — | Brecha (sin señal) | Candidata |
