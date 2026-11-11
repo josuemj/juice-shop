@@ -1,0 +1,48 @@
+# Filebeat: lee el audit log JSON de ModSecurity y lo envia a Elasticsearch.
+# Los documentos quedan en el data stream filebeat-<version> (patron filebeat-*),
+# que es uno de los indices que Kibana Security revisa por defecto.
+
+filebeat.inputs:
+  - type: filestream
+    id: modsecurity-audit
+    paths:
+      - /var/log/modsecurity/audit.log
+    tags: ["waf", "modsecurity"]
+    parsers:
+      - ndjson:
+          # Todo el JSON de ModSecurity queda bajo modsec.*
+          target: "modsec"
+          add_error_key: true
+
+processors:
+  # Copia los campos clave a nombres ECS para que las reglas y el dashboard
+  # puedan usar source.ip, url.original, etc.
+  - copy_fields:
+      fields:
+        - from: modsec.transaction.client_ip
+          to: source.ip
+        - from: modsec.transaction.request.method
+          to: http.request.method
+        - from: modsec.transaction.request.uri
+          to: url.original
+        - from: modsec.transaction.response.http_code
+          to: http.response.status_code
+        - from: modsec.transaction.request.headers.User-Agent
+          to: user_agent.original
+      ignore_missing: true
+      fail_on_error: false
+  - add_fields:
+      target: event
+      fields:
+        module: modsecurity
+        dataset: modsecurity.audit
+        category: web
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  # Laboratorio: se usa el superusuario. En el informe se puede mencionar
+  # como riesgo residual (en produccion seria un usuario con permisos minimos).
+  username: "elastic"
+  password: "${ELASTIC_PASSWORD}"
+
+logging.level: info
