@@ -1,0 +1,167 @@
+# Entorno Blue Team: Juice Shop detras de un WAF (ModSecurity + OWASP CRS)
+# y un SIEM minimo (Elasticsearch + Kibana + Filebeat).
+#
+#   Navegador / Red Team --> :8080 WAF (ModSecurity + CRS) --> juice-shop:3000
+#                                  |
+#                                  +-- audit.log (JSON) --> Filebeat --> Elasticsearch <-- Kibana :5601
+#
+# Juice Shop NO publica puertos al host: la unica forma de llegar a la app es
+# pasando por el WAF.
+
+name: juice-shop-blue
+
+services:
+  # Prepara el volumen de logs para que el WAF (usuario sin privilegios) pueda escribir.
+  log-init:
+    image: busybox:1.37.0
+    command: ["sh", "-c", "touch /var/log/modsecurity/audit.log && chmod 0777 /var/log/modsecurity && chmod 0666 /var/log/modsecurity/audit.log"]
+    volumes:
+      - waf-logs:/var/log/modsecurity
+    restart: "no"
+
+  juice-shop:
+    image: ${JUICE_SHOP_IMAGE:-bkimminich/juice-shop:v20.3.0}
+    # Para el Hito 4 (probar las correcciones del codigo), comentar "image" y usar:
+    # build:
+    #   context: ..
+    #   dockerfile: Dockerfile
+    expose:
+      - "3000"
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  waf:
+    image: owasp/modsecurity-crs:4.25.2-nginx-202610180210-lts
+    depends_on:
+      log-init:
+        condition: service_completed_successfully
+      juice-shop:
+        condition: service_started
+    ports:
+      - "${WAF_BIND:-127.0.0.1}:8080:8080"
+    environment:
+      BACKEND: http://juice-shop:3000
+      PORT: "8080"
+      # DetectionOnly = solo registra | On = bloquea (403). Se cambia en .env
+      MODSEC_RULE_ENGINE: ${MODSEC_RULE_ENGINE:-DetectionOnly}
+      # RelevantOnly = solo peticiones que disparan reglas o dan error | On = todas
+      MODSEC_AUDIT_ENGINE: ${MODSEC_AUDIT_ENGINE:-RelevantOnly}
+      MODSEC_AUDIT_LOG: /var/log/modsecurity/audit.log
+      MODSEC_AUDIT_LOG_FORMAT: JSON
+      MODSEC_AUDIT_LOG_TYPE: Serial
+      # Sin la parte E (cuerpo de la respuesta) para no inflar los logs
+      MODSEC_AUDIT_LOG_PARTS: ABIJFHZ
+      BLOCKING_PARANOIA: ${PARANOIA:-1}
+      ANOMALY_INBOUND: ${ANOMALY_INBOUND:-5}
+      ANOMALY_OUTBOUND: ${ANOMALY_OUTBOUND:-4}
+    volumes:
+      - waf-logs:/var/log/modsecurity
+      # Exclusiones propias para corregir falsos positivos (Hito 3)
+      - ./waf/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf:/etc/modsecurity.d/owasp-crs/rules/REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf:ro
+    networks:
+      - app-net
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.19.24}
+    environment:
+      discovery.type: single-node
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:?Falta ELASTIC_PASSWORD en .env}
+      xpack.security.enabled: "true"
+      # Laboratorio local: sin TLS. La seguridad (usuarios) queda activa porque
+      # Kibana la necesita para las reglas de deteccion y alertas.
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      xpack.license.self_generated.type: basic
+      ES_JAVA_OPTS: -Xms${ES_HEAP:-1g} -Xmx${ES_HEAP:-1g}
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - siem-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:$${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+
+  # Asigna la contrasena del usuario interno kibana_system (una sola vez).
+  setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION:-8.19.24}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_PASSWORD: ${KIBANA_PASSWORD:?Falta KIBANA_PASSWORD en .env}
+    command:
+      - bash
+      - -c
+      - >-
+        echo "Asignando contrasena a kibana_system...";
+        until curl -s -X POST -u "elastic:$${ELASTIC_PASSWORD}"
+        -H "Content-Type: application/json"
+        http://elasticsearch:9200/_security/user/kibana_system/_password
+        -d "{\"password\":\"$${KIBANA_PASSWORD}\"}" | grep -q "^{}"; do sleep 5; done;
+        echo "Listo."
+    networks:
+      - siem-net
+    restart: "no"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION:-8.19.24}
+    depends_on:
+      setup:
+        condition: service_completed_successfully
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_PASSWORD}
+      # Necesarias para reglas de deteccion, alertas y objetos cifrados (32+ caracteres)
+      XPACK_SECURITY_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY:?Falta KIBANA_ENCRYPTION_KEY en .env}
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY}
+      XPACK_REPORTING_ENCRYPTIONKEY: ${KIBANA_ENCRYPTION_KEY}
+    ports:
+      - "127.0.0.1:5601:5601"
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+    networks:
+      - siem-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -I http://localhost:5601 | grep -q 'HTTP/1.1 302 Found'"]
+      interval: 10s
+      timeout: 10s
+      retries: 60
+    restart: unless-stopped
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:${ELASTIC_VERSION:-8.19.24}
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      waf:
+        condition: service_started
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - waf-logs:/var/log/modsecurity:ro
+      - filebeat-data:/usr/share/filebeat/data
+    networks:
+      - siem-net
+    restart: unless-stopped
+
+networks:
+  app-net:
+  siem-net:
+
+volumes:
+  waf-logs:
+  es-data:
+  kibana-data:
+  filebeat-data:
