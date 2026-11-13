@@ -56,7 +56,7 @@ El uso de IA está permitido según la guía de la UVG. En el Hito 4 es obligato
 |---|---|---|---|
 | Configuración | Grupos y roles, repositorio, entorno levantado (Juice Shop responde por el WAF en `localhost:8080`) | `entorno-blue-team/` | Pendiente |
 | H1 | PASTA etapas 1-4, DFD con límites de confianza, STRIDE, requisitos de seguridad, 5 casos de abuso, reconocimiento | `docs/hito-1/` | Pendiente |
-| H2 | Workflow con SAST, SCA, SBOM (CycloneDX con Syft) y DAST (ZAP baseline), security gate, 4 vulnerabilidades explotadas | `docs/hito-2/`, `.github/workflows/` | Pendiente |
+| H2 | Workflow con SAST, SCA, SBOM (CycloneDX con Syft) y DAST (ZAP baseline), security gate, 4 vulnerabilidades explotadas | `docs/hito-2/`, `.github/workflows/` | En progreso |
 | H3 | Logs del WAF en Elastic, 3 reglas de detección, dashboard, WAF en DetectionOnly y luego en On | `docs/hito-3/`, `blue-team/` | Pendiente |
 | H4 | Corrección de 2 vulnerabilidades con IA, auditoría del código generado, re-prueba | `docs/hito-4/`, `docs/ia/` | Pendiente |
 | Informe final | Línea de tiempo, matriz de trazabilidad, riesgo residual, lecciones aprendidas | `docs/informe-final/` | Pendiente |

@@ -1,0 +1,74 @@
+# Reglas propias del grupo para las amenazas priorizadas en el Hito 1
+# (docs/hito-1/blue-team-h1.md). Complementan los rulesets del registro.
+
+rules:
+  - id: juice-shop-sequelize-raw-query-interpolation
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Consulta SQL cruda armada con interpolación o concatenación. Usar
+      reemplazos parametrizados (replacements / bind) o el ORM.
+    metadata:
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command"
+      owasp: "A05:2025 - Injection"
+      h1-threats: [T-AUTH-01, T-CAT-01]
+      h1-requirements: [RS-01]
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: $OBJ.sequelize.query($QUERY, ...)
+          - pattern: sequelize.query($QUERY, ...)
+      - metavariable-pattern:
+          metavariable: $QUERY
+          pattern-either:
+            - pattern: "`...${...}...`"
+            - pattern: $A + $B
+
+  - id: juice-shop-marsdb-where-injection
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Filtro $where de MarsDB/MongoDB armado con datos concatenados: permite
+      ejecutar JavaScript en la base de datos. Usar filtros por campo.
+    metadata:
+      cwe: "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+      owasp: "A05:2025 - Injection"
+      h1-threats: [T-CAT-02, T-NDB-02, T-NDB-03]
+      h1-requirements: [RS-01]
+      category: security
+    # Regex porque "$where" choca con la sintaxis de metavariables de Semgrep
+    pattern-regex: \$where:\s*(?:'[^']*'\s*\+|"[^"]*"\s*\+|`[^`]*\$\{)
+
+  # p/secrets no detecta la llave de lib/insecurity.ts porque está en una sola
+  # línea con "\r\n" escapados
+  - id: juice-shop-hardcoded-private-key
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      Llave privada embebida en el código fuente. Cargarla desde un secreto
+      fuera del repositorio y rotarla.
+    metadata:
+      cwe: "CWE-321: Use of Hard-coded Cryptographic Key"
+      owasp: "A04:2025 - Cryptographic Failures"
+      h1-threats: [T-AUTH-02]
+      h1-requirements: [RS-04]
+      category: security
+    paths:
+      include: ["*.ts", "*.js", "*.mjs"]
+    pattern-regex: -----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----
+
+  - id: juice-shop-angular-bypass-security-trust
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      bypassSecurityTrustHtml desactiva la sanitización de Angular. Si el valor
+      viene del usuario o de la API, es XSS.
+    metadata:
+      cwe: "CWE-79: Improper Neutralization of Input During Web Page Generation"
+      owasp: "A05:2025 - Injection"
+      h1-threats: [T-SPA-01, T-SPA-03, T-CAT-05]
+      h1-requirements: [RS-02]
+      category: security
+    patterns:
+      - pattern: $SANITIZER.bypassSecurityTrustHtml($VALUE)
+      - pattern-not: $SANITIZER.bypassSecurityTrustHtml("...")
