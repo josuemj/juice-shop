@@ -1,0 +1,19 @@
+{
+  "data": {
+    "id": 1,
+    "username": "",
+    "email": "admin@juice-sh.op",
+    "password": "0192023a7bbd73250516f069df18b500",
+    "role": "admin",
+    "deluxeToken": "",
+    "lastLoginIp": "",
+    "profileImage": "assets/public/images/uploads/defaultAdmin.png",
+    "totpSecret": "",
+    "isActive": true,
+    "createdAt": "2026-11-13 20:19:46.973 +00:00",
+    "updatedAt": "2026-11-13 20:19:46.973 +00:00",
+    "deletedAt": null
+  },
+  "bid": 1,
+  "iat": 1794601627
+}

