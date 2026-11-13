@@ -1,0 +1,33 @@
+# Rutas excluidas del SAST (Hito 2). La justificación de cada grupo está en
+# docs/hito-2/pipeline-devsecops.md.
+
+# Dependencias y artefactos de build
+node_modules/
+frontend/node_modules/
+build/
+dist/
+frontend/dist/
+frontend/.angular/
+coverage/
+
+# Pruebas: no se despliegan
+test/
+cypress/
+*.spec.ts
+
+# Variantes vulnerables y corregidas de los retos de código: no se ejecutan
+# y duplicarían los hallazgos de las rutas reales
+data/static/codefixes/
+rsn/
+
+# Fuera de alcance según H1 §3.4 (inseguros a propósito, no se despliegan)
+infrastructure/
+terraform/
+vagrant/
+
+# Documentación y entregables del proyecto
+docs/
+red-team/
+blue-team/
+*.md
+*.pdf
