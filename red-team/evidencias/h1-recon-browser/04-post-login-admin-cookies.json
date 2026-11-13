@@ -1,0 +1,42 @@
+[
+  {
+    "name": "language",
+    "value": "en",
+    "domain": "127.0.0.1",
+    "path": "/",
+    "expires": 1825819939,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "welcomebanner_status",
+    "value": "dismiss",
+    "domain": "127.0.0.1",
+    "path": "/",
+    "expires": 1825819940,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "continueCode",
+    "value": "oqBOmKp8PMvlzx6rDE2agd9DS88hnxtE7hlYU4aAL3QknJweXRY4VbNy971W",
+    "domain": "127.0.0.1",
+    "path": "/",
+    "expires": 1825819945,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "token",
+    "value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJkYXRhIjp7ImlkIjoxLCJ1c2VybmFtZSI6IiIsImVtYWlsIjoiYWRtaW5AanVpY2Utc2gub3AiLCJwYXNzd29yZCI6IjAxOTIwMjNhN2JiZDczMjUwNTE2ZjA2OWRmMThiNTAwIiwicm9sZSI6ImFkbWluIiwiZGVsdXhlVG9rZW4iOiIiLCJsYXN0TG9naW5JcCI6IiIsInByb2ZpbGVJbWFnZSI6ImFzc2V0cy9wdWJsaWMvaW1hZ2VzL3VwbG9hZHMvZGVmYXVsdEFkbWluLnBuZyIsInRvdHBTZWNyZXQiOiIiLCJpc0FjdGl2ZSI6dHJ1ZSwiY3JlYXRlZEF0IjoiMjAyNi0xMS0xMCAwMzo0NDo0NS40MDkgKzAwOjAwIiwidXBkYXRlZEF0IjoiMjAyNi0xMS0xMCAwMzo0NDo0NS40MDkgKzAwOjAwIiwiZGVsZXRlZEF0IjpudWxsfSwiYmlkIjoxLCJpYXQiOjE3OTQyODM5NTB9.o2AO70BqKgX5dG0oeVnOwtYbWVGuD6255ts6HsyPrrNxdyc65ACDYPyaEPoPNnWl-sL1_KL_W9dUWpwe1JDfi2JaOkHmtkOxmrv36MJx2txYZst0XYvmMLMoE8zjc9SNvpvgv7WIpHHa-HP6dM4yToJyWtSwgdJ46yLZKC8Uiu4",
+    "domain": "127.0.0.1",
+    "path": "/",
+    "expires": 1794312750,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

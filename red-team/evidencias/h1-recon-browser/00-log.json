@@ -1,0 +1,92 @@
+[
+  {
+    "ts": "2026-11-10T04:12:20.276Z",
+    "label": "goto",
+    "url": "http://127.0.0.1:3000/"
+  },
+  {
+    "ts": "2026-11-10T04:12:24.509Z",
+    "label": "storage-dump:01-home-sin-sesion",
+    "localStorageKeys": [],
+    "cookieNames": [
+      "language",
+      "welcomebanner_status"
+    ]
+  },
+  {
+    "ts": "2026-11-10T04:12:26.030Z",
+    "label": "goto",
+    "url": "http://127.0.0.1:3000/#/score-board"
+  },
+  {
+    "ts": "2026-11-10T04:12:30.292Z",
+    "label": "login-attempt",
+    "email": "admin@juice-sh.op"
+  },
+  {
+    "ts": "2026-11-10T04:12:33.410Z",
+    "label": "storage-dump:04-post-login-admin",
+    "localStorageKeys": [
+      "token"
+    ],
+    "cookieNames": [
+      "language",
+      "welcomebanner_status",
+      "continueCode",
+      "token"
+    ]
+  },
+  {
+    "ts": "2026-11-10T04:12:34.912Z",
+    "label": "goto",
+    "url": "http://127.0.0.1:3000/#/administration",
+    "role": "admin"
+  },
+  {
+    "ts": "2026-11-10T04:12:36.498Z",
+    "label": "goto",
+    "url": "http://127.0.0.1:3000/#/privacy-security/profile"
+  },
+  {
+    "ts": "2026-11-10T04:12:38.092Z",
+    "label": "goto",
+    "url": "http://127.0.0.1:3000/#/complain"
+  },
+  {
+    "ts": "2026-11-10T04:12:39.674Z",
+    "label": "storage-dump:08-post-logout",
+    "localStorageKeys": [
+      "token"
+    ],
+    "cookieNames": [
+      "language",
+      "welcomebanner_status",
+      "token",
+      "continueCode"
+    ]
+  },
+  {
+    "ts": "2026-11-10T04:12:43.706Z",
+    "label": "login-attempt",
+    "email": "recon.customer@example.com"
+  },
+  {
+    "ts": "2026-11-10T04:12:46.769Z",
+    "label": "storage-dump:09-post-login-customer",
+    "localStorageKeys": [
+      "token"
+    ],
+    "cookieNames": [
+      "language",
+      "welcomebanner_status",
+      "continueCode",
+      "token"
+    ]
+  },
+  {
+    "ts": "2026-11-10T04:12:48.274Z",
+    "label": "goto",
+    "url": "http://127.0.0.1:3000/#/administration",
+    "role": "customer"
+  }
+]
