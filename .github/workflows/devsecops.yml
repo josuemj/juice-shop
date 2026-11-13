@@ -24,7 +24,7 @@ env:
 jobs:
   sast:
     name: "SAST · Semgrep"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -62,7 +62,7 @@ jobs:
 
   sca:
     name: "SCA · npm audit"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: "Check out Git repository"
@@ -95,7 +95,7 @@ jobs:
 
   build:
     name: "Build · imagen Docker"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - name: "Check out Git repository"
@@ -126,7 +126,7 @@ jobs:
   sbom:
     name: "SBOM · Syft (CycloneDX)"
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: "Download image"
@@ -154,7 +154,7 @@ jobs:
   dast:
     name: "DAST · ZAP baseline"
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: "Download image"
@@ -198,7 +198,7 @@ jobs:
     name: "Security gate"
     needs: [sast, sca, sbom, dast]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: "Check out Git repository"

@@ -21,6 +21,8 @@ El pipeline **arranca en modo reporte**: los escáneres nunca fallan por hallazg
 
 Los workflows originales de Juice Shop (`ci.yml`, `codeql-analysis.yml`, `release.yml`, etc., 16 en total) se eliminaron.
 
+> **Dónde se ejecutan los runs.** La cuenta dueña del repositorio oficial (`xtsebas/juice-shop`) tuvo un bloqueo de facturación de GitHub que impidió iniciar cualquier job de Actions ("*The job was not started because your account is locked due to a billing issue*"), aunque el repositorio es público. Por eso la evidencia de este hito se generó en el fork espejo **`josuemj/juice-shop`**, con el mismo código y el mismo workflow. Cuando se resuelva el bloqueo, el pipeline corre en el repositorio oficial sin cambios.
+
 ## 2. Arquitectura del workflow
 
 ```mermaid
@@ -45,6 +47,7 @@ flowchart LR
   - Acciones fijadas por SHA de commit.
   - Imágenes de herramientas fijadas por versión, elegidas con al menos 2 semanas de publicadas.
   - `concurrency` para cancelar corridas viejas.
+  - Runner fijado en `ubuntu-24.04` (no `ubuntu-latest`), para que la migración de GitHub a Ubuntu 26 no cambie el entorno ni mueva los conteos del gate.
   - Sin secretos: ningún paso necesita tokens.
 
 ## 3. Controles
@@ -119,6 +122,18 @@ Se genera sobre la **imagen**, no sobre el código, porque eso es lo que corre e
 - `-I` evita que las advertencias fallen el job.
 - **Reglas de enfrentamiento:** el DAST solo ataca el contenedor que el propio job levanta en `localhost` del runner. Nunca apunta a `juice-shop.herokuapp.com` ni a otra instancia.
 
+**Hallazgos High y Medium de la primera corrida y su relación con el H1:**
+
+| Riesgo | Alerta ZAP (ID) | Amenaza / requisito H1 |
+|---|---|---|
+| High | Off-site Redirect (10028), en `/redirect` | T-CFG-05 redirección abierta |
+| Medium | Cross-Domain Misconfiguration (10098), CORS `*` | T-CFG-04 CORS abierto |
+| Medium | Content Security Policy Header Not Set (10038-1) | T-SPA-01 XSS (sin CSP como segunda barrera) |
+| Medium | Missing Anti-clickjacking Header (10020-1) | Configuración de cabeceras (A02:2025) |
+| Medium | Session ID in URL Rewrite (3-1) | T-SPA-02 robo de sesión |
+
+Entre los Low aparece *Application Error Disclosure* (90022), que confirma T-CFG-03 (trazas de pila, RS-12).
+
 ## 4. Security gate: no-regresión (ratchet)
 
 ### 4.1 Por qué no un umbral de "cero hallazgos"
@@ -159,22 +174,25 @@ El resultado se publica en el resumen del run (*Job Summary*) como una tabla con
 
 ### 4.5 Línea base vigente
 
-| Métrica | Valor | Medido en |
-|---|---:|---|
-| `sast.error` | *pendiente* | Primera corrida del workflow en GitHub |
-| `sca.backend.critical` | *pendiente* | |
-| `sca.backend.high` | *pendiente* | |
-| `sca.frontend.critical` | *pendiente* | |
-| `sca.frontend.high` | *pendiente* | |
-| `dast.high` | *pendiente* | |
-| `dast.medium` | *pendiente* | |
+Medida en la primera corrida en modo reporte: [run 43358600554](https://github.com/josuemj/juice-shop/actions/runs/43358600554) (2026-11-13 03:23 UTC, commit `30f1d17a6`).
 
-**Medición preliminar local** (2026-11-10, mismas herramientas y configuración, antes de borrar los workflows originales):
-- Semgrep: 45 `ERROR`. De ellos, 6 están en los workflows viejos que ya se eliminaron, así que en el CI se esperan unos 39.
-- npm audit backend: 7 críticas y 20 altas.
-- npm audit frontend: 0 críticas y 1 alta.
+| Métrica | Línea base |
+|---|---:|
+| `sast.error` | 40 |
+| `sca.backend.critical` | 7 |
+| `sca.backend.high` | 20 |
+| `sca.frontend.critical` | 0 |
+| `sca.frontend.high` | 1 |
+| `dast.high` | 1 |
+| `dast.medium` | 4 |
 
-Los valores oficiales son los del CI.
+Métricas informativas de esa corrida:
+- `sast.warning` 39, `sast.info` 4, `sast.scan-errors` 12.
+- `sca.backend.moderate` 9, `sca.backend.low` 2, `sca.frontend.moderate` 2, `sca.frontend.low` 12.
+- `dast.low` 8, `dast.info` 4.
+- `sbom.components` 2743.
+
+**Coherencia con la medición local previa:** en local (2026-11-10) Semgrep dio 45 `ERROR`. De ellos, 6 estaban en los workflows originales que se eliminaron, y después se agregó la regla `juice-shop-hardcoded-private-key` (+1): 45 − 6 + 1 = **40**. npm audit dio los mismos valores en local y en el CI.
 
 ## 5. Procedimiento: de modo reporte a enforce
 
@@ -206,7 +224,8 @@ Los valores oficiales son los del CI.
 
 | Fecha | Evento | Run / commit |
 |---|---|---|
-| *pendiente* | Primera corrida en modo reporte | |
+| 2026-11-12 | Primer intento en el repo oficial: no inicia por bloqueo de facturación de la cuenta dueña | [run 43357748954](https://github.com/xtsebas/juice-shop/actions/runs/43357748954) |
+| 2026-11-12 | Primera corrida en modo reporte: 6 jobs en verde, 11 min | [run 43358600554](https://github.com/josuemj/juice-shop/actions/runs/43358600554) · `30f1d17a6` |
 | *pendiente* | Línea base fijada | |
 | *pendiente* | Prueba del gate: regresión bloqueada | |
 | *pendiente* | Prueba del gate: vuelve a verde | |
