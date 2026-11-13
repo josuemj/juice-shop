@@ -1,0 +1,2 @@
+URL de reproducción manual (abrir en un navegador):
+http://127.0.0.1:3000/#/search?q=%3Ciframe%20src%3D%22javascript%3Aalert%28%60xss%60%29%22%3E
