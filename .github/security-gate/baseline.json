@@ -1,6 +1,6 @@
 {
   "description": "Línea base del security gate de no-regresión (H2). Ver docs/hito-2/pipeline-devsecops.md. mode: report = solo informa; enforce = falla si una métrica sube sobre la línea base. null = aún sin línea base.",
-  "mode": "report",
+  "mode": "enforce",
   "updated": "2026-11-12",
   "source": "https://github.com/josuemj/juice-shop/actions/runs/43358600554",
   "metrics": {
