@@ -226,9 +226,9 @@ Métricas informativas de esa corrida:
 |---|---|---|
 | 2026-11-12 | Primer intento en el repo oficial: no inicia por bloqueo de facturación de la cuenta dueña | [run 43357748954](https://github.com/xtsebas/juice-shop/actions/runs/43357748954) |
 | 2026-11-12 | Primera corrida en modo reporte: 6 jobs en verde, 11 min | [run 43358600554](https://github.com/josuemj/juice-shop/actions/runs/43358600554) · `30f1d17a6` |
-| *pendiente* | Línea base fijada | |
-| *pendiente* | Prueba del gate: regresión bloqueada | |
-| *pendiente* | Prueba del gate: vuelve a verde | |
+| 2026-11-12 | Línea base fijada (modo reporte, runner `ubuntu-24.04`): las 7 métricas iguales a la línea base | [run 43361246603](https://github.com/josuemj/juice-shop/actions/runs/43361246603) · `ad47e4ad8` |
+| 2026-11-12 | **Prueba del gate: regresión bloqueada.** Rama `test/gate-regresion`, modo `enforce` + SQLi canario en `routes/gateCanary.ts`. La regla `juice-shop-sequelize-raw-query-interpolation` la detecta (`gateCanary.ts:5`), `sast.error` sube de 40 a 41 y el job *Security gate* falla con "Regresión sast.error: 40 → 41". Los 5 escáneres terminan en verde: falla solo el gate | [run 43362314706](https://github.com/josuemj/juice-shop/actions/runs/43362314706) · `c3be2946c` |
+| 2026-11-12 | **Prueba del gate: vuelve a verde.** Misma rama, se elimina el canario. En modo `enforce` las 7 métricas vuelven a la línea base (`sast.error` 40) y los 6 jobs terminan en verde | [run 43363597319](https://github.com/josuemj/juice-shop/actions/runs/43363597319) · `b510a83fa` |
 | *pendiente* | Cambio a modo enforce | |
 
 ## 8. Trazabilidad con H1
