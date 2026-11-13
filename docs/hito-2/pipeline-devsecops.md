@@ -21,7 +21,7 @@ El pipeline **arranca en modo reporte**: los escáneres nunca fallan por hallazg
 
 Los workflows originales de Juice Shop (`ci.yml`, `codeql-analysis.yml`, `release.yml`, etc., 16 en total) se eliminaron.
 
-> **Dónde se ejecutan los runs.** La cuenta dueña del repositorio oficial (`xtsebas/juice-shop`) tuvo un bloqueo de facturación de GitHub que impidió iniciar cualquier job de Actions ("*The job was not started because your account is locked due to a billing issue*"), aunque el repositorio es público. Por eso la evidencia de este hito se generó en el fork espejo **`josuemj/juice-shop`**, con el mismo código y el mismo workflow. Cuando se resuelva el bloqueo, el pipeline corre en el repositorio oficial sin cambios.
+> **Repositorio de trabajo.** El primer repositorio del grupo (`xtsebas/juice-shop`) tuvo un bloqueo de facturación de GitHub en la cuenta dueña que impidió iniciar cualquier job de Actions ("*The job was not started because your account is locked due to a billing issue*"), aunque el repositorio es público. El grupo trasladó el trabajo a **`josuemj/juice-shop`**, otro fork público de Juice Shop. Ese es el repositorio de trabajo desde el H2, y toda la evidencia de este hito se generó ahí.
 
 ## 2. Arquitectura del workflow
 
