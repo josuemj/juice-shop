@@ -1,9 +1,9 @@
-# Hito 1 - Diseño seguro - Blue Team
+# Hito 1 - Diseño seguro y modelado de amenazas
 
-**Equipo Blue Team:** Juan Pablo Solís, Josué Marroquín
+**Equipo:** Sebastián Huertas, Gerson Ramírez, Juan Pablo Solís, Josué Marroquín
 **Metodología:** PASTA (Process for Attack Simulation and Threat Analysis), etapas 1 a 4, con STRIDE como taxonomía de amenazas por componente
 **Objeto de análisis:** OWASP Juice Shop v20.3.0 desplegado detrás del entorno `entorno-blue-team/` (ModSecurity + OWASP CRS 4.25 LTS, Filebeat, Elasticsearch y Kibana 8.19.24)
-**Versión:** 1.0 · 2026-11-10
+**Versión:** 2.0 · 2026-11-16
 
 ---
 
@@ -12,7 +12,7 @@
 1. [Contexto y método](#1-contexto-y-método)
 2. [Etapa 1 · Objetivos de negocio y de seguridad](#2-etapa-1--objetivos-de-negocio-y-de-seguridad)
 3. [Etapa 2 · Alcance técnico](#3-etapa-2--alcance-técnico)
-4. [Etapa 3 · Descomposición de la aplicación (DFD y límites de confianza)](#4-etapa-3--descomposición-de-la-aplicación)
+4. [Etapa 3 · Descomposición de la aplicación (DFD por objetivo de negocio y límites de confianza)](#4-etapa-3--descomposición-de-la-aplicación)
 5. [Etapa 4 · Análisis de amenazas (STRIDE por componente)](#5-etapa-4--análisis-de-amenazas)
 6. [Requisitos de seguridad](#6-requisitos-de-seguridad)
 7. [Casos de abuso (Dado / Cuando / Entonces)](#7-casos-de-abuso)
@@ -24,18 +24,25 @@
 
 ## 1. Contexto y método
 
-OWASP Juice Shop es una tienda en línea intencionalmente vulnerable. En este proyecto la tratamos como si fuera una tienda real que el grupo debe proteger. El Blue Team es responsable de la **detección y contención en tiempo de ejecución** (WAF + SIEM) y comparte con el Red Team el pipeline DevSecOps y la remediación.
+OWASP Juice Shop es una tienda en línea intencionalmente vulnerable. En este proyecto la tratamos como si fuera una tienda real que el grupo debe proteger.
+
+El modelo se construye desde **dos perspectivas fusionadas**, aplicadas a cada objetivo, componente y amenaza:
+
+- **Perspectiva ofensiva:** qué ve un atacante desde afuera (reconocimiento y superficie de ataque, §3.6), por dónde entra y cómo abusaría de cada flujo de datos.
+- **Perspectiva defensiva:** qué control lo previene en el código, qué parte del tráfico ve el WAF, qué queda registrado en el SIEM y qué se puede contener en tiempo de ejecución.
+
+Por eso los DFD se presentan **por objetivo de negocio** (§4.3) y cada recorrido indica, en la misma fila, cómo se abusa y cómo se detecta o contiene. Las brechas aparecen donde una de las dos columnas queda vacía.
 
 PASTA tiene siete etapas. Este hito cubre las cuatro primeras; las demás se completan en los hitos siguientes:
 
 | Etapa PASTA | Contenido | Dónde se entrega |
 |---|---|---|
 | 1. Definir objetivos | Objetivos de negocio, objetivos de seguridad, impacto | **Este documento, §2** |
-| 2. Definir alcance técnico | Componentes, tecnologías, dependencias, superficie | **Este documento, §3** |
-| 3. Descomponer la aplicación | DFD, límites de confianza, puntos de entrada, activos | **Este documento, §4** |
+| 2. Definir alcance técnico | Componentes, tecnologías, dependencias, superficie de ataque y reconocimiento | **Este documento, §3** |
+| 3. Descomponer la aplicación | DFD por objetivo de negocio, límites de confianza, flujos, puntos de entrada | **Este documento, §4** |
 | 4. Analizar amenazas | Agentes de amenaza, inteligencia, STRIDE por componente | **Este documento, §5** |
 | 5. Analizar vulnerabilidades | Hallazgos del pipeline (SAST/SCA/DAST) | H2 (`docs/hito-2/`) |
-| 6. Modelar ataques | PoC del Red Team, detección y bloqueo del Blue Team | H2 y H3 (`red-team/poc/`, `docs/hito-3/`) |
+| 6. Modelar ataques | PoC reproducibles, detección y bloqueo con WAF y SIEM | H2 y H3 (`red-team/poc/`, `docs/hito-3/`) |
 | 7. Análisis de riesgo e impacto | Riesgo residual tras correcciones | Informe final (`docs/informe-final/`) |
 
 Cada amenaza de §5 tiene un ID (`T-xxx-nn`) que se reutiliza en los requisitos (§6), los casos de abuso (§7) y, más adelante, en la matriz de trazabilidad del informe final.
@@ -81,12 +88,12 @@ Estos supuestos están marcados para validación del equipo en §9.
 | SO-2 | Las funciones administrativas y de contabilidad solo son accesibles a esos roles | BO-2, BO-3 | Autorización |
 | SO-3 | Las credenciales y sesiones (JWT) no se pueden adivinar, robar ni falsificar | BO-2 | Autenticación |
 | SO-4 | Precios, cantidades, cupones y saldos no se pueden manipular desde el cliente | BO-3 | Integridad |
-| SO-5 | La entrada del usuario nunca se ejecuta como código (SQL, NoSQL, JS, plantillas, XML) | BO-1, BO-2, BO-5 | Integridad, confidencialidad |
+| SO-5 | La entrada del usuario nunca se ejecuta como código (SQL, NoSQL, JS, plantillas, XML) | BO-1, BO-2, BO-4, BO-5 | Integridad, confidencialidad |
 | SO-6 | El servicio sigue disponible ante tráfico abusivo (ráfagas, escaneos, payloads costosos) | BO-1 | Disponibilidad |
 | SO-7 | **Todo ataque contra la tienda queda registrado, se detecta y puede contenerse** (WAF + SIEM) | Todos | No repudio, detección |
 | SO-8 | Los registros de seguridad son íntegros, no exponen secretos y permiten reconstruir una línea de tiempo | SO-7, BO-6 | Integridad, confidencialidad |
 
-SO-7 y SO-8 son los objetivos que el Blue Team posee directamente; el resto se cumple con controles en código (H4) y se **compensa** con WAF/SIEM mientras el código no está corregido.
+SO-7 y SO-8 se cumplen con la plataforma de detección y contención (WAF + SIEM). El resto se cumple con controles en el código (H4) y se **compensa** con WAF y SIEM mientras el código no está corregido.
 
 ### 2.4 Activos críticos e impacto
 
@@ -99,7 +106,7 @@ SO-7 y SO-8 son los objetivos que el Blue Team posee directamente; el resto se c
 | A5 | Integridad de precios, cupones, saldos de billetera y pedidos | D1 SQLite, D2 MarsDB | Alto: pérdida económica directa |
 | A6 | Disponibilidad de la tienda | Contenedor `juice-shop` | Medio-alto: ventas perdidas |
 | A7 | Archivos confidenciales del servidor (`ftp/`, `encryptionkeys/`, `logs/`) | D3 sistema de archivos | Medio-alto: fuga de información interna y de llaves |
-| A8 | Registros de seguridad (audit log del WAF e índices `filebeat-*`) | D4 volumen `waf-logs`, D5 Elasticsearch | Alto para el Blue Team: sin ellos no hay detección ni evidencia |
+| A8 | Registros de seguridad (audit log del WAF e índices `filebeat-*`) | D4 volumen `waf-logs`, D5 Elasticsearch | Alto: sin ellos no hay detección ni evidencia |
 | A9 | Reglas de detección, dashboard y configuración del WAF | P6 Kibana, `entorno-blue-team/waf/` | Alto: un atacante o insider puede "cegar" la defensa |
 | A10 | Credenciales del SIEM (`ELASTIC_PASSWORD`, `KIBANA_PASSWORD`, `KIBANA_ENCRYPTION_KEY`) | `entorno-blue-team/.env` (no versionado) | Alto: control total del SIEM |
 
@@ -144,7 +151,7 @@ Definidos en `lib/insecurity.ts:142-146`:
 
 ### 3.3 Superficie de ataque expuesta a través del WAF
 
-Inventario a partir de `server.ts`. Se agrupa por función; el Red Team amplía este inventario en su entregable de reconocimiento.
+Inventario a partir de `server.ts` (vista desde el código), contrastado con lo que el servidor realmente exigió en el reconocimiento externo (§3.6). Se agrupa por función.
 
 | Grupo | Rutas principales | Autenticación exigida por el servidor |
 |---|---|---|
@@ -152,9 +159,10 @@ Inventario a partir de `server.ts`. Se agrupa por función; el Red Team amplía 
 | Catálogo y reseñas | `GET /rest/products/search`, `GET/PUT /rest/products/:id/reviews`, `PATCH/POST /rest/products/reviews`, `/api/Products` | Parcial (`server.ts:397-399`, `662-663`) |
 | Carrito, pedidos y pagos | `/rest/basket/:id`, `/rest/basket/:id/checkout`, `/rest/basket/:id/coupon/:coupon`, `/api/BasketItems`, `/api/Cards`, `/rest/wallet/balance`, `/rest/deluxe-membership`, `/rest/track-order/:id`, `/rest/order-history` | JWT, pero sin verificar propietario en varios casos |
 | B2B | `POST /b2b/v2/orders` | JWT (`server.ts:452`) |
-| Archivos y cargas | `POST /file-upload`, `POST /profile/image/file`, `POST /profile/image/url`, `POST /rest/memories` | Variable |
+| Archivos y cargas | `POST /file-upload`, `POST /profile/image/file`, `POST /profile/image/url`, `POST /rest/memories` | **Ninguna** en `/file-upload` (aceptó un archivo sin `Authorization`, `server.ts:337`); cookie `token` en `/profile/*` |
 | Perfil y privacidad | `GET/POST /profile`, `POST /rest/user/data-export`, `/dataerasure` | Cookie/JWT |
-| Información y administración | `/rest/admin/application-version`, `/rest/admin/application-configuration`, `/api-docs`, `/metrics`, `/redirect` | **Ninguna** |
+| Información y administración | `/rest/admin/application-version`, `/rest/admin/application-configuration`, `/api-docs`, `/metrics`, `/redirect`, `GET /api/Challenges`, `/robots.txt`, `/sitemap.xml` | **Ninguna** |
+| Usuarios | `GET /api/Users` | JWT de **cualquier** rol: un token `customer` obtiene la lista completa de usuarios (`server.ts:391`, §3.6) |
 | Directorios expuestos | `/ftp`, `/encryptionkeys`, `/support/logs`, `/.well-known` | **Ninguna** (listado de directorio habilitado, `server.ts:290-304`) |
 | Chatbot | `POST /rest/chat` | Variable |
 | Tiempo real | Socket.IO | Ninguna |
@@ -175,6 +183,28 @@ Inventario a partir de `server.ts`. Se agrupa por función; el Red Team amplía 
 - Imágenes Docker fijadas por versión en `docker-compose.yml` (Juice Shop `v20.3.0`, CRS `4.25.2-...-lts`, Elastic `8.19.24`, busybox `1.37.0`).
 - Dependencias npm del backend (`package.json`) y frontend (`frontend/package.json`). Su análisis (SCA y SBOM CycloneDX con Syft) es parte de H2 y cubre la categoría **A03:2025 Software Supply Chain Failures**.
 
+### 3.6 Reconocimiento: la superficie vista desde afuera
+
+El inventario de §3.3 sale del código. Para contrastarlo con lo que un atacante obtiene sin acceso al código, se hizo un reconocimiento contra una instancia local propia (`bkimminich/juice-shop:v20.3.0`, ligada a `127.0.0.1:3000`), en tres pasadas:
+
+1. **`curl` manual**, una petición a la vez, con fecha, hora y resultado de cada una (`red-team/evidencias/h1-reconocimiento.md`, cuerpos y cabeceras en `red-team/evidencias/h1-recon/`).
+2. **Navegador real** (Chromium con Playwright) para el almacenamiento de la sesión, formularios de carga y vistas por rol (`red-team/evidencias/h1-reconocimiento-navegador.md` y `h1-recon-browser/`).
+3. **Spider y active scan de ZAP** (`red-team/evidencias/h1-recon-zap/`). El active scan ya es explotación automatizada, así que sus resultados se tratan como insumo para H2.
+
+**Huella tecnológica:** Angular 22 (SPA con rutas `/#/...`), Express 4.22 (lo imprime una página de error 401), Sequelize 6 y SQLite. `GET /rest/admin/application-version` devuelve la versión `20.3.0` sin autenticación. Cabeceras de la raíz: hay `X-Content-Type-Options` y `X-Frame-Options`, pero **no** hay `Content-Security-Policy` ni `Strict-Transport-Security`, y CORS responde `Access-Control-Allow-Origin: *`.
+
+| Observación desde afuera | Qué aprovecharía un atacante | Qué implica para la defensa | Amenaza |
+|---|---|---|---|
+| `robots.txt` declara `Disallow: /ftp` y `/ftp` muestra un listado con `acquisitions.md`, `coupons_2013.md.bak`, `package.json.bak`, entre otros | El propio servidor le indica dónde buscar; respaldos y cupones antiguos | El WAF no bloquea un `GET /ftp` sin payload; solo una regla de escaneo por IP lo señala | T-CFG-01, T-FS-01 |
+| `GET /ftp/eastere.gg` responde 403 con una traza de pila que muestra `/juice-shop/...` y la cadena de llamadas de Express | Rutas internas y versiones para afinar ataques | Requiere quitar las trazas en el código (RS-12) | T-CFG-03 |
+| El JWT del login trae el registro completo del usuario: **hash MD5 de la contraseña**, rol y `totpSecret` | Quien lea un token (XSS, logs) obtiene un hash que se crackea de inmediato (`admin123`) | El audit log del WAF también guarda ese JWT en la cabecera | T-AUTH-10, T-AUTH-06 |
+| El token se guarda en `localStorage` **y** en una cookie `token` sin `HttpOnly` ni `Secure` | Un XSS lo roba desde dos lugares | El WAF solo ve la petición que inyecta el script, no el robo | T-SPA-02 |
+| `/#/administration` muestra "403" a un `customer`, pero `GET /api/Users` con su token devuelve todos los usuarios | Saltarse la interfaz y llamar a la API directo | Petición legítima en forma: el WAF no la distingue; requiere autorización por rol en el servidor | T-SPA-05 |
+| `POST /file-upload` aceptó un archivo sin cabecera `Authorization` (204) | Cargas maliciosas (ZIP, XML, YAML) sin cuenta | Las reglas del CRS solo ven el contenido si viaja en campos inspeccionables | T-FILE-07 |
+| `/profile/image/url` descarga una URL indicada por el usuario | SSRF desde el servidor | El WAF ve la URL en el cuerpo; no sabe si apunta a un destino interno | T-FILE-04 |
+| `GET /api/Challenges` publica sin autenticación el catálogo de retos (186 en esta versión) | Lista de vulnerabilidades intencionales sin leer el código | Confirma el supuesto de §5.2: la defensa no puede depender del secreto | §5.2 |
+| El active scan de ZAP solo encontró problemas de cabeceras: su spider no ejecuta JavaScript y **nunca llegó a `/rest/*` ni `/api/*`** | — | Un DAST "de fábrica" no prueba ausencia de vulnerabilidades; el pipeline de H2 usa el spider AJAX | — |
+
 ---
 
 ## 4. Etapa 3 · Descomposición de la aplicación
@@ -183,68 +213,135 @@ Inventario a partir de `server.ts`. Se agrupa por función; el Red Team amplía 
 
 ```mermaid
 flowchart LR
-  E1["E1 Cliente"] -->|"HTTP :8080"| SYS(("0 · Sistema Juice Shop<br/>WAF + App + SIEM"))
-  E2["E2 Atacante / Red Team"] -->|"HTTP :8080"| SYS
+  E1["E1 Cliente / personal de la tienda"] -->|"HTTP :8080"| SYS(("0 · Sistema Juice Shop<br/>WAF + App + SIEM"))
+  E6["E6 Cliente empresarial (B2B)"] -->|"API :8080"| SYS
+  E2["E2 Atacante"] -->|"HTTP :8080"| SYS
   SYS -->|"HTML / JSON"| E1
-  E3["E3 Analista SOC (Blue Team)"] -->|"HTTP :5601"| SYS
+  E3["E3 Analista de seguridad"] -->|"HTTP :5601"| SYS
   SYS -.->|"prompts (fuera de alcance)"| E4["E4 Proveedor LLM"]
   SYS -->|"GET a URL provista por el usuario"| E5["E5 Servidor externo"]
 ```
 
-### 4.2 DFD nivel 1 con límites de confianza
+### 4.2 Notación, entidades y zonas de confianza
 
-Notación: rectángulos = entidades externas, óvalos = procesos, cilindros = almacenes de datos. Cada recuadro punteado rojo es una **zona de confianza**; todo flujo que cruza el borde de una zona cruza un **límite de confianza (TB)**.
+| Símbolo | Significado |
+|---|---|
+| Rectángulo | Entidad externa |
+| Óvalo | Proceso |
+| Cilindro | Almacén de datos |
+| Recuadro punteado rojo | **Zona de confianza**. Todo flujo que cruza su borde cruza un **límite de confianza (TB)**, descrito en §4.4 |
+| Flecha continua | Flujo de datos del negocio. Los IDs `F` son los del catálogo de §4.5 |
+| Etiqueta con ⚠ | **Punto de abuso** (perspectiva ofensiva), con los IDs de las amenazas de §5.4 |
+| Flecha punteada | **Flujo de detección** (perspectiva defensiva): lo que el WAF registra y llega al SIEM |
+
+Los IDs de componentes (`E`, `P`, `D`) son los de §3.1. Las entidades externas son:
+
+| ID | Entidad | Agentes de amenaza que puede representar (§5.1) |
+|---|---|---|
+| E1 | Cliente o personal de la tienda (`customer`, `deluxe`, `accounting`, `admin`) que usa la SPA | TA-2 (cliente malicioso), TA-4 (insider) |
+| E2 | Atacante: bot o escáner, cliente malicioso o atacante dirigido | TA-1, TA-2, TA-3, TA-5 |
+| E3 | Analista de seguridad que opera el SIEM | TA-4 (insider) |
+| E4 | Proveedor LLM del chatbot (fuera de alcance, §3.4) | — |
+| E5 | Servidor externo arbitrario (destino de URLs que da el usuario) | — |
+| E6 | Cliente empresarial que integra pedidos por API (B2B) | TA-2, TA-3 con un JWT válido |
+
+| Zona | Contenido | Confianza |
+|---|---|---|
+| Zona 0 · No confiable | E1, E2, E3, E6: host y red del laboratorio | Ninguna: cualquiera puede enviar cualquier cosa |
+| Zona 1 · Borde | P1 WAF | Filtra patrones conocidos; no entiende la lógica de negocio |
+| Zona 2 · Aplicación (red `app-net`) | P2 API, P3 Socket.IO, P4 sandbox | Aquí se toman las decisiones de negocio |
+| Zona 2b · Datos de la aplicación | D1 SQLite, D2 MarsDB, D3 sistema de archivos | Solo accesible desde P2 |
+| Zona 3 · Monitoreo (red `siem-net`) | D4 audit log, P5 Filebeat, D5 Elasticsearch, P6 Kibana | Separada de la aplicación |
+| Zona 4 · Externos | E4, E5 | Fuera de nuestro control |
+
+Para que cada diagrama sea legible, la Zona 3 aparece resumida como `D4 audit.log` y un nodo `SIEM` (P5 → D5 → P6), excepto en BO-6, donde los registros son parte del objetivo y se muestran completos.
+
+### 4.3 DFD por objetivo de negocio
+
+Cada objetivo de §2.2 se descompone en su propio DFD, con solo los componentes y flujos que participan en él. Debajo de cada diagrama, una tabla recorre los flujos y fusiona las dos perspectivas: **cómo se abusa** cada paso y **cómo se previene, detecta o contiene**. Cuando la columna defensiva no tiene control en el WAF ni en el SIEM, la protección depende solo del código.
+
+#### 4.3.1 BO-1 · Vender de forma continua (catálogo, carrito y checkout)
 
 ```mermaid
 flowchart LR
-  subgraph Z0["Zona 0 · No confiable: host y red del laboratorio"]
-    E1["E1 Cliente<br/>navegador + SPA Angular"]
-    E2["E2 Atacante<br/>Red Team, bots, escáneres"]
-    E3["E3 Analista SOC<br/>Blue Team"]
+  subgraph Z0["Zona 0 · No confiable"]
+    E1["E1 Cliente"]
+    E2["E2 Atacante<br/>bots y escáneres"]
   end
-
   subgraph Z1["Zona 1 · Borde"]
-    P1(["P1 WAF<br/>nginx + ModSecurity v3<br/>OWASP CRS 4.25 LTS<br/>127.0.0.1:8080"])
+    P1(["P1 WAF<br/>ModSecurity + CRS"])
   end
-
-  subgraph Z2["Zona 2 · Aplicación (red app-net)"]
-    P2(["P2 API REST Express<br/>+ SPA estática :3000"])
+  subgraph Z2["Zona 2 · Aplicación"]
+    P2(["P2 API Express"])
     P3(["P3 Socket.IO"])
-    P4(["P4 Sandbox vm / notevil<br/>B2B y YAML"])
-    subgraph Z2D["Zona 2b · Datos de la aplicación"]
-      D1[("D1 SQLite<br/>data/juiceshop.sqlite")]
-      D2[("D2 MarsDB en memoria<br/>reseñas y pedidos")]
-      D3[("D3 Sistema de archivos<br/>ftp/ uploads/ logs/ encryptionkeys/")]
+    P4(["P4 Sandbox vm"])
+    subgraph Z2D["Zona 2b · Datos"]
+      D1[("D1 SQLite<br/>Products, BasketItems")]
+      D2[("D2 MarsDB<br/>reseñas y pedidos")]
     end
   end
-
-  subgraph Z3["Zona 3 · Monitoreo (red siem-net)"]
-    D4[("D4 Volumen waf-logs<br/>audit.log JSON")]
-    P5(["P5 Filebeat"])
-    D5[("D5 Elasticsearch<br/>127.0.0.1:9200")]
-    P6(["P6 Kibana<br/>127.0.0.1:5601"])
+  subgraph Z3["Zona 3 · Monitoreo"]
+    D4[("D4 audit.log")]
+    SIEM(["SIEM<br/>P5 → D5 → P6"])
   end
 
+  E1 -->|"F1 búsqueda, carrito, checkout"| P1
+  E2 -->|"F2 ráfagas, escaneo, payloads costosos ⚠ T-WAF-05"| P1
+  P1 -->|"F3 tráfico no bloqueado"| P2
+  P1 -->|"F4 notificaciones ⚠ T-WS-02"| P3
+  P2 -->|"F5 catálogo y carrito ⚠ T-CAT-01"| D1
+  P2 -->|"F6 reseñas con $where ⚠ T-NDB-03"| D2
+  P2 -->|"F8 YAML y pedidos B2B ⚠ T-SBX-02, T-FILE-06"| P4
+  P1 -.->|"F11 eventos relevantes ⚠ T-LOG-03"| D4
+  D4 -.->|"F12, F13"| SIEM
+
+  style Z0 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z1 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2D stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z3 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+```
+
+| Recorrido | Flujo · límite | Perspectiva ofensiva: cómo se abusa | Perspectiva defensiva: control y detección | Amenazas |
+|---|---|---|---|---|
+| Saturar la tienda con volumen | F2 · TB1 | Ráfagas o escaneos sin payload contra el login, la búsqueda o el checkout; el CRS no limita la tasa | WAF: reglas 913xxx para escáneres conocidos. SIEM: regla de ráfaga o escaneo por IP (RS-18). Código: rate limit (RS-06) | T-WAF-05, T-AUTH-04 |
+| Degradar el catálogo con SQLi | F2 → F3 → F5 · TB1–TB3 | Consultas `UNION` o costosas en `/rest/products/search` | WAF: 942xxx en el query string. SIEM: regla SQLi. Código: consultas parametrizadas (RS-01) | T-CAT-01 |
+| Bloquear el servidor desde las reseñas | F3 → F6 · TB3 | `sleep()` dentro del `$where` de reseñas (`routes/showProductReviews.ts:36`) | WAF: solo si el payload coincide con reglas de JavaScript (934xxx, a confirmar en H3). Código: filtros por campo (RS-01) | T-NDB-03 |
+| Ocupar el event loop | F3 → F8 · TB3 | Bucle infinito en un pedido B2B o YAML bomb en una carga: cada petición ocupa 2 s y responde 503 | El 503 queda en el audit log (estado relevante) y en el SIEM. Código: no evaluar entrada (RS-10) y limitar cargas (RS-08) | T-SBX-02, T-FILE-06 |
+| Esconder el ataque en el ruido | F11 → F13 · TB5 | Generar miles de eventos para ocultar el ataque real o llenar el disco | Dashboard de volumen por IP; capacidad de Elasticsearch (`ES_HEAP`) | T-LOG-03, T-ES-04 |
+
+#### 4.3.2 BO-2 · Proteger los datos personales y de pago (cuentas y sesión)
+
+```mermaid
+flowchart LR
+  subgraph Z0["Zona 0 · No confiable"]
+    E1["E1 Cliente<br/>(víctima)"]
+    E2["E2 Atacante"]
+  end
+  subgraph Z1["Zona 1 · Borde"]
+    P1(["P1 WAF"])
+  end
+  subgraph Z2["Zona 2 · Aplicación"]
+    P2(["P2 API Express<br/>login, JWT, usuarios, perfil<br/>llave RSA embebida ⚠ T-AUTH-02"])
+    subgraph Z2D["Zona 2b · Datos"]
+      D1[("D1 SQLite<br/>Users, Cards, Addresses")]
+    end
+  end
+  subgraph Z3["Zona 3 · Monitoreo"]
+    D4[("D4 audit.log")]
+    SIEM(["SIEM<br/>P5 → D5 → P6"])
+  end
   subgraph Z4["Zona 4 · Externos"]
-    E4["E4 Proveedor LLM"]
-    E5["E5 Servidor externo arbitrario"]
+    E5["E5 Servidor externo"]
   end
 
-  E1 -->|"F1 HTTP: credenciales, JWT, pedidos"| P1
-  E2 -->|"F2 HTTP: payloads maliciosos"| P1
-  P1 -->|"F3 HTTP proxy: tráfico no bloqueado"| P2
-  P1 -->|"F4 Socket.IO"| P3
-  P2 -->|"F5 SQL: Sequelize y consultas crudas"| D1
-  P2 -->|"F6 consultas con $where"| D2
-  P2 -->|"F7 lectura y escritura de archivos"| D3
-  P2 -->|"F8 datos B2B / YAML no confiables"| P4
-  P2 -.->|"F9 prompts del chatbot"| E4
-  P2 -->|"F10 GET a URL del usuario"| E5
-  P1 -->|"F11 escritura de audit.log"| D4
-  D4 -->|"F12 lectura (montaje ro)"| P5
-  P5 -->|"F13 bulk HTTP sin TLS, usuario elastic"| D5
-  P6 <-->|"F14 consultas, reglas, alertas"| D5
-  E3 -->|"F15 HTTP navegador"| P6
+  E1 <-->|"F1 envía credenciales, perfil y tarjetas; recibe un JWT con hash y rol ⚠ T-AUTH-10, guardado en localStorage y cookie ⚠ T-SPA-02"| P1
+  E2 -->|"F2 SQLi en login, fuerza bruta, JWT forjado, /api/Users con token de cliente ⚠ T-AUTH-01, T-AUTH-03, T-AUTH-04, T-SPA-05"| P1
+  P1 <-->|"F3"| P2
+  P2 -->|"F5 consulta de login cruda, hash MD5 ⚠ T-AUTH-06"| D1
+  P2 -->|"F10 URL de imagen de perfil ⚠ T-FILE-04"| E5
+  P1 -.->|"F11 incluye contraseñas y JWT ⚠ T-WAF-06"| D4
+  D4 -.->|"F12, F13"| SIEM
 
   style Z0 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
   style Z1 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
@@ -254,50 +351,257 @@ flowchart LR
   style Z4 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
 ```
 
-### 4.3 Límites de confianza
-
-| ID | Límite | Flujos que lo cruzan | Controles existentes | Brechas identificadas |
+| Recorrido | Flujo · límite | Perspectiva ofensiva: cómo se abusa | Perspectiva defensiva: control y detección | Amenazas |
 |---|---|---|---|---|
-| **TB1** | Zona 0 → Borde (Internet/host → WAF) | F1, F2 | CRS PL1 con umbral de anomalía 5 (entrada) y 4 (salida); puerto ligado a `127.0.0.1` por defecto | Arranca en `DetectionOnly` (no bloquea); sin TLS; sin rate limiting; los fragmentos `#` de la URL nunca llegan al WAF |
-| **TB2** | Borde → Aplicación (WAF → `juice-shop:3000`) | F3, F4 | Juice Shop no publica puertos (`expose`), solo el WAF llega a él; verificado por `verificar.sh` paso 2 | La app confía ciegamente en lo que el WAF deja pasar; la app ve la IP del WAF, no la del cliente |
-| **TB3** | Lógica de aplicación → almacenamiento | F5, F6, F7, F8 | ORM Sequelize en la mayoría de modelos | Consultas SQL crudas con interpolación, `$where` con concatenación, rutas de archivo sin normalizar; `vm` de Node **no** es un límite de seguridad |
-| **TB4** | Aplicación → servicios externos | F9, F10 | Ninguno | El servidor hace `fetch` a cualquier URL del usuario (SSRF) |
-| **TB5** | Plano de datos → plano de monitoreo | F11, F12 | Filebeat monta el volumen en solo lectura; redes `app-net` y `siem-net` separadas | El volumen se crea con permisos `0777`/`0666` (`docker-compose.yml:17`); el log contiene cabeceras y cuerpos (credenciales, JWT) |
-| **TB6** | Analista → SIEM | F15 (y F13 internamente) | Seguridad de Elastic activa con usuario/contraseña; puertos ligados a `127.0.0.1` | Sin TLS; un solo superusuario (`elastic`) para humanos y Filebeat; sin cuentas nominales |
+| Entrar como admin sin contraseña | F2 → F3 → F5 · TB1–TB3 | `' OR 1=1--` en el correo: la consulta cruda (`routes/login.ts:34`) devuelve el primer usuario | WAF: 942xxx en el cuerpo JSON. SIEM: regla SQLi. Código: consulta parametrizada (RS-01) | T-AUTH-01 |
+| Adivinar la contraseña | F2 · TB1 | Diccionario contra `admin@juice-sh.op`; el login no limita intentos | Sin bloqueo del CRS (no hay payload). SIEM: ráfaga de 401 por IP. Código: rate limit (RS-06) | T-AUTH-04 |
+| Fabricar un token de admin | F2 → F3 · TB1, TB2 | Token `alg:none`, o firmado con la llave RSA publicada en `lib/insecurity.ts:21` | WAF: regla propia para `alg:none` (AC-07). Una firma hecha con la llave filtrada no es detectable: solo la rotación la neutraliza (RS-04) | T-AUTH-02, T-AUTH-03 |
+| Robar o leer la sesión | F3 → F1 (respuesta) · TB2, TB1 | El payload del JWT trae el hash MD5 y el rol; el token vive en `localStorage` y en una cookie sin `HttpOnly` (§3.6) | El WAF no interviene. Código: JWT mínimo y revocable (RS-27) | T-AUTH-10, T-SPA-02, T-AUTH-11 |
+| Listar a todos los usuarios | F2 → F3 → F5 · TB2 | `GET /api/Users` con un token de `customer`, saltándose el bloqueo de la interfaz | Petición legítima en forma: sin señal en el WAF. Código: autorización por rol (RS-28) y registro del acceso (RS-13) | T-SPA-05 |
+| Usar el servidor como proxy | F10 · TB4 | URL de imagen de perfil que apunta a un servicio interno (SSRF) | WAF: ve la URL en el cuerpo, pero no sabe si es interna. Código: allowlist de destinos (RS-09) | T-FILE-04 |
+| Efecto colateral en los registros | F11 · TB5 | — | El audit log copia contraseñas y JWT al SIEM: enmascarar antes de indexar (RS-19) | T-WAF-06, T-LOG-02 |
 
-### 4.4 Flujos de datos
+#### 4.3.3 BO-3 · Cobrar correctamente (precios, cupones, billetera y membresías)
 
-| Flujo | Origen → Destino | Datos | Protocolo | Cruza | Sensibilidad |
-|---|---|---|---|---|---|
-| F1 | E1 → P1 | Credenciales, JWT (`Authorization` y cookie `token`), PII, datos de tarjeta, pedidos | HTTP | TB1 | Alta |
-| F2 | E2 → P1 | Payloads de SQLi, XSS, traversal, JWT forjados, ráfagas | HTTP | TB1 | — |
-| F3 | P1 → P2 | Todo lo que el WAF no bloquea | HTTP | TB2 | Alta |
-| F4 | P1 → P3 | Eventos de notificación | Socket.IO (polling / WebSocket) | TB2 | Baja |
-| F5 | P2 → D1 | Consultas SQL, usuarios, tarjetas, productos | En proceso | TB3 | Alta |
-| F6 | P2 → D2 | Consultas `$where` con datos del usuario | En proceso | TB3 | Media |
-| F7 | P2 → D3 | Archivos subidos, archivos servidos, access log de morgan | Sistema de archivos | TB3 | Media-alta |
-| F8 | P2 → P4 | Órdenes B2B (`orderLinesData`) y YAML subidos | En proceso | TB3 | Alta (ejecución de código) |
-| F9 | P2 → E4 | Prompts del chatbot, resultados de herramientas | HTTPS | TB4 | Media |
-| F10 | P2 → E5 | URL de imagen de perfil provista por el usuario | HTTP(S) | TB4 | Alta (SSRF) |
-| F11 | P1 → D4 | Transacciones que disparan reglas o tienen estado relevante: partes A, B, I, J, F, H, Z | Escritura de archivo | TB5 | **Alta** (incluye credenciales y JWT) |
-| F12 | D4 → P5 | Líneas JSON del audit log | Lectura de archivo | TB5 | Alta |
-| F13 | P5 → D5 | Eventos con campos `modsec.*` y ECS (`source.ip`, `url.original`, `http.response.status_code`, `user_agent.original`) | HTTP sin TLS, usuario `elastic` | — | Alta |
-| F14 | P6 ↔ D5 | Consultas, reglas de detección, alertas | HTTP sin TLS | — | Alta |
-| F15 | E3 → P6 | Credenciales del analista, consultas | HTTP sin TLS | TB6 | Alta |
+```mermaid
+flowchart LR
+  subgraph Z0["Zona 0 · No confiable"]
+    E1["E1 Cliente o contabilidad<br/>(incluye cliente malicioso)"]
+  end
+  subgraph Z1["Zona 1 · Borde"]
+    P1(["P1 WAF"])
+  end
+  subgraph Z2["Zona 2 · Aplicación"]
+    P2(["P2 API Express<br/>carrito, cupón, checkout,<br/>billetera, deluxe"])
+    subgraph Z2D["Zona 2b · Datos"]
+      D1[("D1 SQLite<br/>Products, BasketItems,<br/>Wallets, Users.role")]
+      D2[("D2 MarsDB<br/>orders")]
+    end
+  end
+  subgraph Z3["Zona 3 · Monitoreo"]
+    D4[("D4 audit.log")]
+  end
 
-### 4.5 Puntos de entrada y visibilidad para el Blue Team
+  E1 -->|"F1 cantidades, cupón, monto de recarga, id de carrito, estado de entrega ⚠ T-SPA-04"| P1
+  P1 -->|"F3 JSON sin payload sospechoso"| P2
+  P2 -->|"F5 cantidad negativa ⚠ T-ORD-02, cupón ⚠ T-ORD-03, saldo ⚠ T-DB-03, carrito ajeno ⚠ T-ORD-01"| D1
+  P2 -->|"F6 pedido con total calculado desde D1 ⚠ T-ORD-05"| D2
+  P1 -.->|"F11 normalmente sin evento ⚠ T-LOG-04"| D4
 
-El WAF solo puede inspeccionar lo que viaja por F1/F2. Esto define qué amenazas el Blue Team puede detectar y cuáles dependen exclusivamente de la corrección en código.
+  style Z0 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z1 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2D stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z3 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+```
 
-| Punto de entrada | ¿Lo ve el WAF? | ¿Queda en `audit.log`? | Observación |
+| Recorrido | Flujo · límite | Perspectiva ofensiva: cómo se abusa | Perspectiva defensiva: control y detección | Amenazas |
+|---|---|---|---|---|
+| Que la tienda pague al cliente | F1 → F3 → F5 · TB1–TB3 | `PUT /api/BasketItems/:id` con `"quantity": -100`; el checkout calcula el total con esa cantidad (`routes/order.ts:71-136`) | El CRS no ve nada anómalo y no queda evento. Solo el código: validar en el servidor (RS-26) | T-ORD-02, T-SPA-04 |
+| Descuento sin derecho | F1 → F3 → F5 · TB2 | Cupón forjado o reutilizado (`routes/coupon.ts:15-24`) | Sin señal en el WAF. Código: validar vigencia y un solo uso (RS-26) | T-ORD-03 |
+| Saldo gratis | F1 → F3 → F5 · TB2 | Recargar la billetera con un monto arbitrario: basta con tener una tarjeta guardada, y el servidor suma el `balance` que envía el cliente sin cobrar (`routes/wallet.ts:23-27`) | Sin señal en el WAF. Código: acreditar solo pagos confirmados (RS-26) | T-DB-03 |
+| Comprar con el carrito de otro | F1 → F3 → F5 · TB2 | Cambiar el id del carrito en la ruta | Sin señal en el WAF. Código: verificar el dueño (RS-03) y registrar el acceso denegado (RS-13) | T-ORD-01 |
+| Fraude interno sin rastro | F1 → F3 → F6 · TB2 | Personal de contabilidad cambia estados de entrega sin dejar traza | Registro de eventos de negocio con usuario y hora (RS-13) | T-ORD-05 |
+
+Es el objetivo con **menos visibilidad** para el WAF y el SIEM: todas las peticiones de fraude son JSON válido, sin comillas, SQL ni HTML, y suelen responder 200, así que con `RelevantOnly` ni siquiera llegan al audit log. Su protección depende casi por completo del código.
+
+#### 4.3.4 BO-4 · Atender pedidos empresariales (B2B)
+
+```mermaid
+flowchart LR
+  subgraph Z0["Zona 0 · No confiable"]
+    E6["E6 Cliente empresarial (B2B)"]
+    E2["E2 Atacante<br/>con un JWT válido"]
+  end
+  subgraph Z1["Zona 1 · Borde"]
+    P1(["P1 WAF"])
+  end
+  subgraph Z2["Zona 2 · Aplicación"]
+    P2(["P2 API Express<br/>POST /b2b/v2/orders"])
+    P4(["P4 Sandbox vm + notevil<br/>safeEval(orderLinesData)"])
+  end
+  subgraph Z3["Zona 3 · Monitoreo"]
+    D4[("D4 audit.log")]
+    SIEM(["SIEM<br/>P5 → D5 → P6"])
+  end
+
+  E6 -->|"F16 pedido JSON: cid, orderLinesData + JWT"| P1
+  E2 -->|"F2 orderLinesData con código ⚠ T-ORD-04"| P1
+  P1 -->|"F3"| P2
+  P2 -->|"F8 orderLinesData evaluado ⚠ T-SBX-01, T-SBX-02"| P4
+  P4 -->|"F8 número de pedido o error 503"| P2
+  P1 -.->|"F11 reglas 932xxx, 934xxx y respuestas 503"| D4
+  D4 -.->|"F12, F13"| SIEM
+
+  style Z0 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z1 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z3 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+```
+
+| Recorrido | Flujo · límite | Perspectiva ofensiva: cómo se abusa | Perspectiva defensiva: control y detección | Amenazas |
+|---|---|---|---|---|
+| Ejecutar código en el servidor | F2/F16 → F3 → F8 · TB1–TB3 | `orderLinesData` con JavaScript: se evalúa en `vm` (`routes/b2bOrder.ts:21-23`), que no es un aislamiento de seguridad | WAF: 932xxx o 934xxx solo si el payload coincide con patrones conocidos (parcial). Código: no evaluar entrada (RS-10) | T-ORD-04, T-SBX-01 |
+| Tumbar la tienda desde B2B | F8 · TB3 | Bucle infinito: ocupa el proceso 2 s y responde 503; repetido, afecta también a BO-1 | El 503 queda en el audit log; regla de volumen por IP en el SIEM | T-SBX-02 |
+
+#### 4.3.5 BO-5 · Mantener la reputación (reseñas, feedback y quejas)
+
+```mermaid
+flowchart LR
+  subgraph Z0["Zona 0 · No confiable"]
+    E2["E2 Cliente malicioso"]
+    E1["E1 Otros clientes y admin<br/>(víctimas)"]
+  end
+  subgraph Z1["Zona 1 · Borde"]
+    P1(["P1 WAF"])
+  end
+  subgraph Z2["Zona 2 · Aplicación"]
+    P2(["P2 API Express<br/>reseñas, feedback, quejas"])
+    subgraph Z2D["Zona 2b · Datos"]
+      D1[("D1 SQLite<br/>Feedbacks, Products")]
+      D2[("D2 MarsDB<br/>reseñas")]
+      D3[("D3 Archivos<br/>uploads/complaints")]
+    end
+  end
+  subgraph Z3["Zona 3 · Monitoreo"]
+    D4[("D4 audit.log")]
+    SIEM(["SIEM<br/>P5 → D5 → P6"])
+  end
+
+  E2 -->|"F2 reseña o feedback con HTML, a nombre de otro ⚠ T-CAT-04, T-CAT-05"| P1
+  E2 -->|"F2 adjunto de queja ZIP o XML, sin sesión ⚠ T-FILE-02, T-FILE-03, T-FILE-07"| P1
+  P1 -->|"F3"| P2
+  P2 -->|"F5 feedback, descripción de producto"| D1
+  P2 -->|"F6 reseñas, edición masiva con $where ⚠ T-NDB-01"| D2
+  P2 -->|"F7 archivo de la queja"| D3
+  P2 -->|"F3 respuesta con contenido almacenado"| P1
+  P1 -->|"F1 HTML renderizado como confiable ⚠ T-SPA-03"| E1
+  P1 -.->|"F11 reglas 941xxx y 930xxx en el cuerpo"| D4
+  D4 -.->|"F12, F13"| SIEM
+
+  style Z0 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z1 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2D stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z3 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+```
+
+| Recorrido | Flujo · límite | Perspectiva ofensiva: cómo se abusa | Perspectiva defensiva: control y detección | Amenazas |
+|---|---|---|---|---|
+| XSS almacenado contra el admin | F2 → F3 → F5 · TB1–TB3, y F3 → F1 | Feedback con `<iframe src="javascript:…">`; se guarda y el panel de administración lo muestra como HTML (`administration.component.ts:92`) | WAF: 941xxx sobre el cuerpo **al publicarlo**; la víctima solo hace un GET normal. SIEM: regla XSS. Código: RS-02 | T-CAT-05, T-SPA-03 |
+| Alterar reseñas ajenas | F2 → F3 → F6 · TB2 | Editar reseñas de otros o en masa con un filtro inyectado | Sin payload no hay señal. Código: verificar dueño (RS-03) y filtros por campo (RS-01) | T-CAT-03, T-NDB-01 |
+| Suplantar a otro cliente | F2 → F3 → F5 · TB2 | Publicar feedback con el `UserId` de otra persona en el cuerpo | Sin señal en el WAF. Código: tomar el autor del JWT (RS-03) | T-CAT-04 |
+| Cargar archivos maliciosos | F2 → F3 → F7 · TB1–TB3 | La queja sube su adjunto a `/file-upload`, que no exige sesión: ZIP con `../` o XML con entidades externas | WAF: 930xxx si la ruta con `../` es visible (parcial). Código: RS-08 | T-FILE-02, T-FILE-03, T-FILE-07 |
+
+#### 4.3.6 BO-6 · Cumplir obligaciones de privacidad, de tarjetas y de registros
+
+```mermaid
+flowchart LR
+  subgraph Z0["Zona 0 · No confiable"]
+    E1["E1 Titular de los datos"]
+    E3["E3 Analista de seguridad<br/>(o insider)"]
+  end
+  subgraph Z1["Zona 1 · Borde"]
+    P1(["P1 WAF"])
+  end
+  subgraph Z2["Zona 2 · Aplicación"]
+    P2(["P2 API Express<br/>data-export, dataerasure"])
+    subgraph Z2D["Zona 2b · Datos"]
+      D1[("D1 SQLite<br/>Cards, Memories")]
+      D2[("D2 MarsDB<br/>pedidos y reseñas")]
+      D3[("D3 Archivos<br/>logs/ access log")]
+    end
+  end
+  subgraph Z3["Zona 3 · Monitoreo"]
+    D4[("D4 audit.log")]
+    P5(["P5 Filebeat"])
+    D5[("D5 Elasticsearch")]
+    P6(["P6 Kibana"])
+  end
+
+  E1 -->|"F1 exportar datos, solicitar borrado con layout ⚠ T-FILE-05"| P1
+  P1 -->|"F3"| P2
+  P2 -->|"F5 tarjetas sin cifrar ⚠ T-DB-02"| D1
+  P2 -->|"F6 pedidos y reseñas del titular"| D2
+  P2 -->|"F7 access log servido en /support/logs ⚠ T-FS-02"| D3
+  P1 -->|"F11 contraseñas y JWT en claro ⚠ T-WAF-06, permisos 0777 ⚠ T-LOG-01"| D4
+  D4 -->|"F12"| P5
+  P5 -->|"F13 superusuario elastic ⚠ T-FB-01"| D5
+  P6 <-->|"F14 consultas y reglas"| D5
+  E3 -->|"F15 cuenta compartida, borrar índices ⚠ T-KB-01, T-ES-02"| P6
+
+  style Z0 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z1 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z2D stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+  style Z3 stroke:#c62828,stroke-width:2px,stroke-dasharray:6 4
+```
+
+| Recorrido | Flujo · límite | Perspectiva ofensiva: cómo se abusa | Perspectiva defensiva: control y detección | Amenazas |
+|---|---|---|---|---|
+| Leer archivos del servidor | F1 → F3 → F7 · TB1–TB3 | El parámetro `layout` del formulario de borrado lee archivos locales (`routes/dataErasure.ts:103-104`) | WAF: 930xxx si la ruta trae `../` (parcial). Código: normalizar rutas (RS-08) | T-FILE-05 |
+| Datos de terceros en la exportación | F1 → F3 → F5/F6 · TB2, TB3 | Combinar la exportación con SQLi o IDOR para obtener datos de otros titulares | WAF: 942xxx para la inyección; el IDOR no deja señal (RS-03, RS-13) | T-DB-01, T-ORD-01 |
+| Tarjetas sin cifrar | F5 · TB3 | Quien obtenga `data/juiceshop.sqlite` lee las tarjetas en claro | Fuera del alcance del WAF; riesgo residual (estilo PCI DSS) | T-DB-02 |
+| Logs con información interna | F7 · TB3 | `/support/logs` entrega el access log a cualquiera | Código: cerrar la ruta (RS-11) | T-FS-02 |
+| El SIEM como fuga de secretos | F11 → F13 · TB5 | El audit log copia contraseñas y JWT; quien lea los índices los obtiene | Enmascarar o excluir antes de indexar (RS-19) | T-WAF-06, T-LOG-02, T-ES-03 |
+| Borrar la evidencia | F15 → F14 · TB6 | Un insider borra índices o desactiva reglas; con una cuenta compartida no hay atribución | Cuentas nominales y permisos mínimos (RS-20); reglas exportadas a `blue-team/reglas-siem/` | T-ES-02, T-KB-01, T-KB-02 |
+
+#### 4.3.7 Visibilidad por objetivo
+
+| Objetivo | ¿El WAF ve el abuso? | ¿Queda en el SIEM? | Dónde se protege principalmente |
 |---|---|---|---|
-| Parámetros de query string y path | Sí | Si dispara una regla o el estado es relevante | Caso ideal para CRS |
-| Cuerpo JSON (`Content-Type: application/json`) | Sí, con procesador JSON | Igual | |
-| Cuerpo con `Content-Type: text/plain` u otro tipo | **Parcial**: sin procesador de cuerpo, los campos no se exponen como `ARGS` | Igual | Juice Shop acepta cualquier tipo como JSON (`server.ts:342-343`): **posible evasión, a verificar en H3** |
-| Fragmento `#` de la URL (rutas de la SPA) | **No**, el navegador no lo envía | No | El XSS basado en DOM se ejecuta en el cliente; el WAF solo ve la llamada a la API que la SPA hace después |
-| Semántica del JWT (rol, firma, `alg`) | No sin reglas propias | Cabecera sí (parte B) | Requiere regla propia (ver AC-07) o corrección en código |
-| Lógica de negocio (IDOR, cantidades negativas, cupones) | No | Normalmente no (respuesta 200, sin reglas) | Requiere logs de aplicación; brecha de A09:2025 |
-| Peticiones 404 de escaneo sin payload | No dispara reglas | **No** con `MODSEC_AUDIT_ENGINE=RelevantOnly` | Para detectar escaneo "silencioso" hay que usar `On` temporalmente o enviar el access log de la app |
+| BO-1 Venta continua | Parcial: inyecciones sí, volumen sin payload no | Sí, con reglas de volumen por IP | WAF + SIEM + rate limit en código |
+| BO-2 Datos y sesión | Sí para inyecciones y `alg:none`; no para tokens firmados con la llave filtrada ni para `/api/Users` | Sí para inyecciones y ráfagas de 401 | Código (RS-01, RS-04, RS-27, RS-28) con WAF como compensación |
+| BO-3 Cobro sin fraude | **No** | **No** con `RelevantOnly` | Solo código (RS-03, RS-26) |
+| BO-4 Pedidos B2B | Parcial (patrones de RCE conocidos) | Parcial; los 503 sí | Código (RS-10) |
+| BO-5 Reputación | Sí para XSS al publicar; no para suplantación ni edición ajena | Sí para XSS | Código (RS-02, RS-03) con WAF como compensación |
+| BO-6 Privacidad y registros | Parcial (traversal) | El propio SIEM es un activo a proteger | Configuración del SIEM (RS-19, RS-20) y código |
+
+### 4.4 Límites de confianza
+
+| ID | Límite | Flujos que lo cruzan | Objetivos afectados | Controles existentes | Brechas identificadas |
+|---|---|---|---|---|---|
+| **TB1** | Zona 0 → Borde (host o red → WAF) | F1, F2, F16 | Todos | CRS PL1 con umbral de anomalía 5 (entrada) y 4 (salida); puerto ligado a `127.0.0.1` por defecto | Arranca en `DetectionOnly` (no bloquea); sin TLS; sin rate limiting; los fragmentos `#` de la URL nunca llegan al WAF |
+| **TB2** | Borde → Aplicación (WAF → `juice-shop:3000`) | F3, F4 | Todos | Juice Shop no publica puertos (`expose`), solo el WAF llega a él; verificado por `verificar.sh` paso 2 | La app confía en todo lo que el WAF deja pasar; la app ve la IP del WAF, no la del cliente |
+| **TB3** | Lógica de aplicación → almacenamiento y sandbox | F5, F6, F7, F8 | BO-1 a BO-6 | ORM Sequelize en la mayoría de modelos | Consultas SQL crudas con interpolación, `$where` con concatenación, rutas de archivo sin normalizar, valores de negocio sin validar; `vm` de Node **no** es un límite de seguridad |
+| **TB4** | Aplicación → servicios externos | F9, F10 | BO-2 | Ninguno | El servidor hace `fetch` a cualquier URL del usuario (SSRF) |
+| **TB5** | Plano de datos → plano de monitoreo | F11, F12 | BO-6 (y la detección de todos) | Filebeat monta el volumen en solo lectura; redes `app-net` y `siem-net` separadas | El volumen se crea con permisos `0777`/`0666` (`docker-compose.yml:17`); el log contiene cabeceras y cuerpos (credenciales, JWT) |
+| **TB6** | Analista → SIEM | F15 (y F13 internamente) | BO-6 | Seguridad de Elastic activa con usuario y contraseña; puertos ligados a `127.0.0.1` | Sin TLS; un solo superusuario (`elastic`) para personas y Filebeat; sin cuentas nominales |
+
+### 4.5 Catálogo de flujos de datos
+
+| Flujo | Origen → Destino | Datos | Protocolo | Cruza | Sensibilidad | Objetivos |
+|---|---|---|---|---|---|---|
+| F1 | E1 ↔ P1 | Petición y respuesta: credenciales, JWT (`Authorization` y cookie `token`), PII, datos de tarjeta, pedidos, contenido renderizado | HTTP | TB1 | Alta | BO-1, BO-2, BO-3, BO-5, BO-6 |
+| F2 | E2 → P1 | Payloads de SQLi, XSS, traversal, JWT forjados, ráfagas | HTTP | TB1 | — | Todos |
+| F3 | P1 ↔ P2 | Todo lo que el WAF no bloquea y las respuestas de la app | HTTP | TB2 | Alta | Todos |
+| F4 | P1 → P3 | Eventos de notificación | Socket.IO (polling o WebSocket) | TB2 | Baja | BO-1 |
+| F5 | P2 → D1 | Consultas SQL: usuarios, tarjetas, productos, carritos, billeteras, feedback | En proceso | TB3 | Alta | BO-1, BO-2, BO-3, BO-5, BO-6 |
+| F6 | P2 → D2 | Reseñas y pedidos; consultas `$where` con datos del usuario | En proceso | TB3 | Media | BO-1, BO-3, BO-5, BO-6 |
+| F7 | P2 → D3 | Archivos subidos, archivos servidos, access log de morgan | Sistema de archivos | TB3 | Media-alta | BO-5, BO-6 |
+| F8 | P2 ↔ P4 | Órdenes B2B (`orderLinesData`) y YAML subidos, y su resultado | En proceso | TB3 | Alta (ejecución de código) | BO-1, BO-4 |
+| F9 | P2 → E4 | Prompts del chatbot, resultados de herramientas | HTTPS | TB4 | Media | Fuera de alcance |
+| F10 | P2 → E5 | URL de imagen de perfil provista por el usuario | HTTP(S) | TB4 | Alta (SSRF) | BO-2 |
+| F11 | P1 → D4 | Transacciones que disparan reglas o tienen estado relevante: partes A, B, I, J, F, H, Z | Escritura de archivo | TB5 | **Alta** (incluye credenciales y JWT) | Todos (detección), BO-6 |
+| F12 | D4 → P5 | Líneas JSON del audit log | Lectura de archivo | TB5 | Alta | Todos (detección), BO-6 |
+| F13 | P5 → D5 | Eventos con campos `modsec.*` y ECS (`source.ip`, `url.original`, `http.response.status_code`, `user_agent.original`) | HTTP sin TLS, usuario `elastic` | — | Alta | Todos (detección), BO-6 |
+| F14 | P6 ↔ D5 | Consultas, reglas de detección, alertas | HTTP sin TLS | — | Alta | BO-6 |
+| F15 | E3 → P6 | Credenciales del analista, consultas | HTTP sin TLS | TB6 | Alta | BO-6 |
+| F16 | E6 → P1 | Pedidos B2B: `cid`, `orderLinesData` y JWT | HTTP | TB1 | Alta | BO-4 |
+
+### 4.6 Puntos de entrada: explotabilidad y visibilidad
+
+El WAF solo puede inspeccionar lo que viaja por F1, F2 y F16. Esta tabla une las dos perspectivas: cómo aprovecha un atacante cada tipo de entrada y qué parte de ella puede ver la defensa.
+
+| Punto de entrada | Cómo lo aprovecha un atacante | ¿Lo ve el WAF? | ¿Queda en `audit.log`? | Observación |
+|---|---|---|---|---|
+| Parámetros de query string y path | SQLi y XSS reflejado (búsqueda, rastreo de pedidos) | Sí | Si dispara una regla o el estado es relevante | Caso ideal para el CRS |
+| Cuerpo JSON (`Content-Type: application/json`) | SQLi en login, XSS almacenado, código en B2B | Sí, con procesador JSON | Igual | |
+| Cuerpo con `Content-Type: text/plain` u otro tipo | Enviar el mismo JSON con otro tipo para que el WAF no lo analice | **Parcial**: sin procesador de cuerpo, los campos no se exponen como `ARGS` | Igual | Juice Shop acepta cualquier tipo como JSON (`server.ts:342-343`): **posible evasión, a verificar en H3** |
+| Fragmento `#` de la URL (rutas de la SPA) | XSS basado en DOM en la búsqueda | **No**, el navegador no lo envía | No | El script se ejecuta en el cliente; solo lo mitiga el código (RS-02) |
+| Semántica del JWT (rol, firma, `alg`) | Tokens `alg:none` o firmados con la llave filtrada | No sin reglas propias | Cabecera sí (parte B) | Regla propia para `alg:none` (AC-07); la firma con la llave filtrada solo se neutraliza rotándola |
+| Lógica de negocio (IDOR, cantidades negativas, cupones, saldos) | Fraude y acceso a datos ajenos con peticiones que parecen legítimas | No | Normalmente no (respuesta 200, sin reglas) | Requiere logs de aplicación (RS-13); brecha de A09:2025 |
+| Peticiones 404 de escaneo sin payload | Enumerar rutas con un User-Agent de navegador | No dispara reglas | **No** con `MODSEC_AUDIT_ENGINE=RelevantOnly` | Para detectar el escaneo "silencioso" hay que usar `On` temporalmente o enviar el access log de la app (RS-23) |
 
 ---
 
@@ -311,12 +615,12 @@ El WAF solo puede inspeccionar lo que viaja por F1/F2. Esto define qué amenazas
 | TA-2 | Cliente registrado malicioso | Fraude económico, acceso a datos ajenos | Media, usa la API directamente | IDOR, manipulación de carrito y cupones, XSS almacenado, reseñas falsas |
 | TA-3 | Atacante dirigido | Toma total de la tienda | Alta, lee el código público | Falsificación de JWT con la clave publicada, RCE (SSTI, B2B), evasión del WAF |
 | TA-4 | Insider (contabilidad, admin u operador del SIEM) | Fraude, encubrimiento | Acceso legítimo | Abuso de privilegios, borrar o desactivar logs y reglas |
-| TA-5 | Red Team del grupo (autorizado) | Simular TA-1 a TA-3 | Alta | Según reglas de enfrentamiento, solo contra la instancia local |
+| TA-5 | Pruebas autorizadas del grupo | Simular TA-1 a TA-3 para validar el modelo, las detecciones y las correcciones | Alta | Según las reglas de enfrentamiento, solo contra la instancia local |
 
 ### 5.2 Inteligencia de amenazas
 
-- El código fuente, la lista de retos (`data/static/challenges.yml`) y guías de solución de Juice Shop son públicos. Asumimos que el atacante conoce **todas** las vulnerabilidades; la defensa no puede depender de que no las descubra.
-- Las categorías se clasifican con **OWASP Top 10:2025**, que el curso usa para el Red Team. Las amenazas de §5.4 indican su categoría para alinear con la matriz de trazabilidad.
+- El código fuente, la lista de retos (`data/static/challenges.yml`) y guías de solución de Juice Shop son públicos. El reconocimiento lo confirmó desde afuera: `GET /api/Challenges` publica el catálogo de retos sin autenticación (§3.6). Asumimos que el atacante conoce **todas** las vulnerabilidades; la defensa no puede depender de que no las descubra.
+- Las categorías se clasifican con **OWASP Top 10:2025**, que el curso usa para clasificar los hallazgos. Las amenazas de §5.4 indican su categoría para alinear con la matriz de trazabilidad.
 - El CRS se alinea con estas familias de reglas, útiles para las reglas del SIEM en H3: `913xxx` (detección de escáneres), `920xxx` (protocolo), `930xxx` (LFI/traversal), `931xxx` (RFI), `932xxx` (RCE), `933xxx` (PHP), `934xxx` (Node.js y genéricos), `941xxx` (XSS), `942xxx` (SQLi), `949110` (umbral de anomalía de entrada superado).
 
 ### 5.3 Cobertura STRIDE por componente
@@ -352,10 +656,10 @@ Las referencias a código apuntan al fork; los números de línea corresponden a
 | ID | STRIDE | Amenaza | Evidencia | OWASP 2025 / CWE | Riesgo |
 |---|---|---|---|---|---|
 | T-SPA-01 | I | XSS basado en DOM (búsqueda) y reflejado (rastreo de pedidos): la SPA marca como HTML confiable el término de búsqueda, el número de pedido y descripciones de productos | `frontend/src/app/search-result/search-result.component.ts:146` y `:113`, `track-result/track-result.component.ts:49`, `routes/trackOrder.ts:15-24` | A05 / CWE-79 | Alto |
-| T-SPA-02 | S | Robo de sesión: el JWT se guarda en `localStorage`, legible por cualquier script inyectado | `frontend/src/app/login/login.component.ts:110` | A07 / CWE-922 | Alto |
+| T-SPA-02 | S | Robo de sesión: el JWT se guarda en `localStorage` y en una cookie `token` sin `HttpOnly` ni `Secure`, ambos legibles por cualquier script inyectado | `frontend/src/app/login/login.component.ts:110` y `:113`; confirmado con navegador (§3.6) | A07 / CWE-922 | Alto |
 | T-SPA-03 | I | XSS almacenado en vistas de administración (feedback y correos de usuarios renderizados como HTML) | `administration/administration.component.ts:74`, `:92`; `about/about.component.ts:120` | A05 / CWE-79 | Alto |
 | T-SPA-04 | T | Manipulación de peticiones desde el cliente (cantidades, IDs, precios, rol) asumiendo que la UI las valida | Toda la API; la SPA es la única que restringe ciertas acciones | A06 / CWE-602 | Alto |
-| T-SPA-05 | E | Rutas administrativas protegidas solo en el cliente (`/#/administration`) mientras la API correspondiente solo exige estar autenticado | `GET /api/Users` con `isAuthorized()` sin verificación de rol, `server.ts:391` | A01 / CWE-285 | Alto |
+| T-SPA-05 | E | Rutas administrativas protegidas solo en el cliente (`/#/administration`) mientras la API correspondiente solo exige estar autenticado | `GET /api/Users` con `isAuthorized()` sin verificación de rol, `server.ts:391`; un token `customer` obtuvo la lista completa de usuarios (§3.6) | A01 / CWE-285 | Alto |
 
 #### P1 · WAF (nginx + ModSecurity + CRS)
 
@@ -382,6 +686,8 @@ Las referencias a código apuntan al fork; los números de línea corresponden a
 | T-AUTH-07 | T | Cambio de contraseña por `GET` con parámetros en la URL, expuesto a CSRF y a quedar en logs | `server.ts:625` | A07 / CWE-352 | Medio |
 | T-AUTH-08 | S | Restablecimiento de contraseña con preguntas de seguridad adivinables o investigables | `server.ts:626-627` | A07 / CWE-640 | Medio |
 | T-AUTH-09 | R | No hay eventos de autenticación (éxito/fallo, usuario, IP real) que el SIEM pueda consumir | Solo access log de morgan en `logs/` (`server.ts:366`) | A09 / CWE-778 | Alto |
+| T-AUTH-10 | I | El JWT incluye el registro completo del usuario: hash MD5 de la contraseña, rol y `totpSecret`, legibles por cualquiera que vea el token | `routes/login.ts:23-24` firma `{ data: user }`; observado en el reconocimiento (§3.6) | A01 / CWE-200 | Alto |
+| T-AUTH-11 | S | El JWT no se revoca en el servidor: el cierre de sesión solo lo borra del navegador y un token robado sigue siendo válido hasta 6 horas | `frontend/src/app/navbar/navbar.component.ts:241-247`, `expiresIn: '6h'` en `lib/insecurity.ts:54` | A07 / CWE-613 | Medio |
 
 #### P2b · API · Catálogo, búsqueda y reseñas
 
@@ -402,7 +708,7 @@ Las referencias a código apuntan al fork; los números de línea corresponden a
 | T-ORD-03 | T | Cupones forjados o reutilizados | `PUT /rest/basket/:id/coupon/:coupon`, `server.ts:633` | A06 / CWE-841 | Medio |
 | T-ORD-04 | E | Ejecución de código en pedidos B2B: `orderLinesData` se evalúa dentro de `vm` (ver P4) | `routes/b2bOrder.ts:21-23` | A05 / CWE-94 | Alto |
 | T-ORD-05 | R | Acciones de contabilidad (cambiar estado de entrega) sin traza de quién y cuándo | `server.ts:653` | A09 / CWE-778 | Medio |
-| T-ORD-06 | I | Exposición de datos de tarjeta y direcciones a través de IDs predecibles en `/api/Cards/:id` y `/api/Addresss/:id` | `server.ts:466-480` | A01 / CWE-639 | Medio (a confirmar por Red Team) |
+| T-ORD-06 | I | Exposición de datos de tarjeta y direcciones a través de IDs predecibles en `/api/Cards/:id` y `/api/Addresss/:id` | `server.ts:466-480` | A01 / CWE-639 | Medio (a confirmar con PoC en H2) |
 
 #### P2d · API · Archivos, cargas y perfil
 
@@ -414,14 +720,15 @@ Las referencias a código apuntan al fork; los números de línea corresponden a
 | T-FILE-04 | I | SSRF: el servidor descarga cualquier URL indicada como imagen de perfil | `routes/profileImageUrlUpload.ts:24` | A01 / CWE-918 | Alto |
 | T-FILE-05 | I | Lectura de archivos locales mediante el parámetro `layout` del formulario de borrado de datos | `routes/dataErasure.ts:103-104` | A01 / CWE-22 | Alto |
 | T-FILE-06 | D | YAML bomb / payloads costosos en carga de archivos | `routes/fileUpload.ts:113-114` | A06 / CWE-776 | Medio |
+| T-FILE-07 | E | Carga de archivos sin autenticación: pone T-FILE-02, T-FILE-03 y T-FILE-06 al alcance de cualquier anónimo | `server.ts:337` (sin `isAuthorized`); aceptó un archivo sin `Authorization` en el reconocimiento (§3.6) | A07 / CWE-306 | Alto |
 
 #### P2e · API · Configuración y observabilidad
 
 | ID | STRIDE | Amenaza | Evidencia | OWASP 2025 / CWE | Riesgo |
 |---|---|---|---|---|---|
-| T-CFG-01 | I | Directorios con listado público: `/ftp` (documentos internos, backups), `/encryptionkeys` (llave pública JWT), `/support/logs` (access logs) | `server.ts:290-304` | A02 / CWE-548 | Alto |
+| T-CFG-01 | I | Directorios con listado público: `/ftp` (documentos internos, backups), `/encryptionkeys` (llave pública JWT), `/support/logs` (access logs). El propio `robots.txt` señala `/ftp` | `server.ts:290-304`, `server.ts:227`; listado observado en el reconocimiento (§3.6) | A02 / CWE-548 | Alto |
 | T-CFG-02 | I | Endpoints informativos sin autenticación: `/metrics`, `/api-docs`, `/rest/admin/application-configuration`, `/rest/admin/application-version` | `server.ts:307`, `:634-635`, `:704` | A02 / CWE-200 | Medio |
-| T-CFG-03 | I | Trazas de pila y mensajes de error detallados en respuestas | `errorhandler()` en `server.ts:710` | A10 / CWE-209 | Medio |
+| T-CFG-03 | I | Trazas de pila y mensajes de error detallados en respuestas | `errorhandler()` en `server.ts:710`; `GET /ftp/eastere.gg` devolvió rutas internas y la cadena de llamadas de Express (§3.6) | A10 / CWE-209 | Medio |
 | T-CFG-04 | T | CORS abierto a cualquier origen y secreto de cookies embebido (`'kekse'`) | `server.ts:184`, `:317` | A02 / CWE-942, CWE-798 | Medio |
 | T-CFG-05 | S | Redirección abierta usada para phishing con el dominio de la tienda | `routes/redirect.ts:15-28` | A01 / CWE-601 | Medio |
 
@@ -509,9 +816,9 @@ Las referencias a código apuntan al fork; los números de línea corresponden a
 
 ### 5.5 Amenazas prioritarias
 
-Las diez amenazas de mayor riesgo, que guían las PoC del Red Team (H2), las reglas del SIEM (H3) y las correcciones (H4):
+Las diez amenazas de mayor riesgo, que guían las PoC (H2), las reglas del SIEM (H3) y las correcciones (H4):
 
-| # | Amenaza | Riesgo | ¿El WAF la ve? | Control Blue Team propuesto (H3) | Corrección en código (H4) |
+| # | Amenaza | Riesgo | ¿El WAF la ve? | Detección y contención propuesta (H3) | Corrección en código (H4) |
 |---|---|---|---|---|---|
 | 1 | T-AUTH-01 SQLi en login | Crítico | Sí (cuerpo JSON) | CRS `942xxx` + regla SIEM "SQLi" | Consulta parametrizada |
 | 2 | T-CAT-01 SQLi `UNION` en búsqueda | Crítico | Sí (query string) | CRS `942xxx` + regla SIEM "SQLi" | Consulta parametrizada |
@@ -528,7 +835,7 @@ Las diez amenazas de mayor riesgo, que guían las PoC del Red Team (H2), las reg
 
 ## 6. Requisitos de seguridad
 
-Cada requisito es **verificable**: tiene un criterio de aceptación que se puede probar en el hito indicado. Se dividen en requisitos de aplicación (se cumplen en el código), de plataforma y detección (responsabilidad del Blue Team) y de pipeline.
+Cada requisito es **verificable**: tiene un criterio de aceptación que se puede probar en el hito indicado. Se dividen en requisitos de aplicación (se cumplen en el código), de plataforma y detección (WAF y SIEM) y de pipeline.
 
 ### 6.1 Requisitos de aplicación
 
@@ -541,14 +848,17 @@ Cada requisito es **verificable**: tiene un criterio de aceptación que se puede
 | RS-05 | Las contraseñas deben almacenarse con un algoritmo adaptativo (bcrypt o Argon2) | T-AUTH-06 | Revisión de código de `lib/insecurity.ts` y `models/user.ts` | H4 (riesgo residual si no se corrige) |
 | RS-06 | El login debe limitar intentos: como máximo 10 fallos por IP y por cuenta en 5 minutos, con respuesta 429 | T-AUTH-04, T-WAF-05 | AC-04: el intento 11 recibe 429 | H4 |
 | RS-07 | El registro debe ignorar campos privilegiados (`role`, `deluxeToken`, `totpSecret`) enviados por el cliente | T-AUTH-05 | `POST /api/Users` con `"role":"admin"` crea un usuario `customer` | H4 |
-| RS-08 | El procesamiento de archivos debe deshabilitar entidades externas XML, normalizar rutas dentro de ZIP y limitar tamaño y profundidad | T-FILE-02, T-FILE-03, T-FILE-06 | PoC de XXE y Zip Slip del Red Team fallan | H4 |
+| RS-08 | La carga de archivos debe exigir sesión; el procesamiento debe deshabilitar entidades externas XML, normalizar toda ruta derivada de la entrada (ZIP, `layout`) y limitar tamaño y profundidad | T-FILE-02, T-FILE-03, T-FILE-05, T-FILE-06, T-FILE-07 | `POST /file-upload` sin `Authorization` responde 401; las PoC de XXE, Zip Slip y `layout` fallan | H4 |
 | RS-09 | Las descargas desde URL deben usar una lista de esquemas y dominios permitidos y bloquear rangos privados y de loopback | T-FILE-04, T-EXT-02 | Petición a `http://127.0.0.1` o `http://juice-shop:3000` es rechazada | H4 |
 | RS-10 | La entrada del usuario nunca debe evaluarse como código (`eval`, `pug.compile` con datos del usuario, `vm` con datos B2B) | T-FILE-01, T-ORD-04, T-SBX-01 | SAST sin hallazgos de `eval`/`vm` sobre entrada; PoC de SSTI falla | H2, H4 |
 | RS-11 | Los directorios `/ftp`, `/encryptionkeys`, `/support/logs` y los endpoints `/metrics` y `/rest/admin/*` no deben estar disponibles sin autenticación y rol adecuado | T-CFG-01, T-CFG-02, T-FS-01, T-FS-02 | DAST (ZAP baseline) no reporta listado de directorios; AC-05 recibe 401/403/404 | H2, H4 |
 | RS-12 | Las respuestas de error no deben incluir trazas de pila ni detalles internos | T-CFG-03 | ZAP no reporta divulgación de errores; respuesta de error genérica | H2 |
 | RS-13 | La aplicación debe registrar eventos de seguridad (login exitoso y fallido, acceso denegado por autorización, cambio de rol o contraseña) con usuario, IP real (`X-Forwarded-For` del WAF), ruta y hora en UTC | T-AUTH-09, T-ORD-05, T-DB-04, T-LOG-04 | Los eventos aparecen en Elasticsearch al reproducir AC-04 y AC-06 | H3 (diseño), informe final (riesgo residual si no se implementa) |
+| RS-26 | El servidor debe calcular y validar precios, cantidades (enteros positivos y dentro del stock), cupones (vigencia y un solo uso) y saldos; nunca debe confiar en valores de negocio enviados por el cliente | T-ORD-02, T-ORD-03, T-SPA-04, T-DB-03 | AC-08: `"quantity": -100` responde 400 y el total no cambia; una recarga de billetera sin pago confirmado no aumenta el saldo | H4 (riesgo residual si no se corrige) |
+| RS-27 | El JWT debe contener solo los datos mínimos (id y rol) y poder revocarse en el servidor al cerrar sesión | T-AUTH-10, T-AUTH-11 | El payload decodificado no contiene `password` ni `totpSecret`; un token usado después del cierre de sesión recibe 401 | H4 (riesgo residual si no se corrige) |
+| RS-28 | Las funciones administrativas y de contabilidad, y el listado de usuarios, deben verificar el rol en el servidor, no solo en la interfaz | T-SPA-05 | `GET /api/Users` con un token `customer` responde 403 | H4 |
 
-### 6.2 Requisitos de plataforma y detección (Blue Team)
+### 6.2 Requisitos de plataforma y detección
 
 | ID | Requisito | Mitiga | Criterio de verificación | Hito |
 |---|---|---|---|---|
@@ -560,10 +870,10 @@ Cada requisito es **verificable**: tiene un criterio de aceptación que se puede
 | RS-19 | El audit log no debe almacenar contraseñas ni tokens en claro: se enmascaran o se excluyen las partes/campos sensibles antes de indexar | T-WAF-06, T-LOG-02, T-ES-03 | Búsqueda en `filebeat-*` de una contraseña de prueba usada en AC-01 no devuelve resultados | H3 |
 | RS-20 | Los registros deben ser íntegros: permisos mínimos en `audit.log`, Filebeat con un usuario de solo escritura (no `elastic`), cuentas nominales para cada analista | T-LOG-01, T-FB-01, T-ES-02, T-KB-01 | Revisión de `docker-compose.yml` y de usuarios en Kibana; Filebeat no puede borrar índices | H3 (riesgo residual aceptado si no se implementa) |
 | RS-21 | Los secretos del SIEM (`ELASTIC_PASSWORD`, `KIBANA_PASSWORD`, `KIBANA_ENCRYPTION_KEY`) deben ser únicos, de al menos 32 caracteres para la llave de cifrado, y nunca versionarse | T-ES-01, T-KB-03 | `.env` en `.gitignore` (**cumplido**); escaneo de secretos del pipeline sin hallazgos | H2 |
-| RS-22 | Todos los componentes deben registrar la hora en UTC para correlacionar con las evidencias del Red Team | SO-8 | Las horas de `red-team/evidencias/` coinciden con `@timestamp` en Kibana (±5 s) | H3 |
+| RS-22 | Todos los componentes deben registrar la hora en UTC para correlacionar con las evidencias de las PoC | SO-8 | Las horas de `red-team/evidencias/` coinciden con `@timestamp` en Kibana (±5 s) | H3 |
 | RS-23 | Durante las pruebas de H3 debe existir visibilidad de ataques sin payload (IDOR, escaneo silencioso): `MODSEC_AUDIT_ENGINE=On` temporalmente o envío del access log de la aplicación | T-LOG-04 | AC-05 (variante silenciosa) y AC-06 aparecen en Kibana | H3 |
 
-### 6.3 Requisitos de pipeline (todo el grupo)
+### 6.3 Requisitos de pipeline
 
 | ID | Requisito | Mitiga | Criterio de verificación | Hito |
 |---|---|---|---|---|
@@ -574,7 +884,7 @@ Cada requisito es **verificable**: tiene un criterio de aceptación que se puede
 
 ## 7. Casos de abuso
 
-Formato: **Dado** (contexto y precondiciones) / **Cuando** (acción del atacante) / **Entonces** (comportamiento seguro esperado y evidencia). Cada caso se reproduce en H3 frente al Blue Team y en H4 como re-prueba.
+Formato: **Dado** (contexto y precondiciones) / **Cuando** (acción del atacante) / **Entonces** (comportamiento seguro esperado y evidencia). Cada caso se escribe desde las dos perspectivas: el **Cuando** es el ataque y el **Entonces** es lo que la defensa debe lograr. Se ejecuta como PoC en H2, se reproduce en H3 contra el entorno con WAF y SIEM, y se repite en H4 como re-prueba.
 
 Precondición común a todos los casos (**línea base de H3**): entorno levantado con `docker compose up -d` desde `entorno-blue-team/`, `verificar.sh` sin fallos, y el reloj de las máquinas sincronizado.
 
@@ -605,7 +915,7 @@ Escenario: un atacante anónimo intenta entrar como administrador sin contraseñ
 ```
 
 **Variante de evasión (RS-16):** la misma petición con `Content-Type: text/plain` también debe ser bloqueada o, como mínimo, detectada.
-**Línea base esperada:** en `DetectionOnly` y sin corrección, el atacante obtiene un JWT del primer usuario (admin). A confirmar por el Red Team en H2.
+**Línea base esperada:** en `DetectionOnly` y sin corrección, el atacante obtiene un JWT del primer usuario (admin). A confirmar con la PoC de H2.
 
 ---
 
@@ -661,7 +971,7 @@ Escenario: un atacante envía a una víctima un enlace de rastreo de pedido con 
 
 **Cómo viaja el payload:** el componente toma `id` de la URL (`frontend/src/app/track-result/track-result.component.ts:46`), el servicio lo codifica con `encodeURIComponent` y llama a `/rest/track-order/:id` (`frontend/src/app/Services/track-order.service.ts:20-22`). Si no existe el pedido, la API devuelve el mismo `id` como `orderId` (`routes/trackOrder.ts:15-24`), y la SPA lo inserta como HTML confiable (`track-result.component.ts:49`). Como el payload pasa por el servidor, el WAF lo inspecciona: el CRS decodifica la URL antes de aplicar las reglas 941xxx.
 
-**Línea base esperada:** en `DetectionOnly` y sin corrección, la API devuelve el payload y el navegador ejecuta el `alert`. A confirmar por el Red Team en H2.
+**Línea base esperada:** en `DetectionOnly` y sin corrección, la API devuelve el payload y el navegador ejecuta el `alert`. A confirmar con la PoC de H2.
 
 **Brecha relacionada, XSS de la búsqueda (`#/search?q=`):** ese payload **no** llega al servidor por HTTP. La SPA pide `/rest/products/search?q=` vacío (`search-result.component.ts:63`), filtra los productos en el navegador e inserta el término en el DOM (`search-result.component.ts:146`). El término solo viaja en el evento de Socket.IO `verifyLocalXssChallenge`, y ModSecurity no inspecciona los mensajes de WebSocket. Por eso ni el WAF ni el SIEM lo detectan, y solo la corrección en el código (RS-02) lo mitiga. Es un ejemplo de que el WAF es un control compensatorio, no la corrección.
 
@@ -683,7 +993,7 @@ Escenario: una IP prueba muchas contraseñas contra admin@juice-sh.op
   Y que el audit log registra respuestas 4xx distintas de 404 como relevantes
   Cuando el atacante envía 50 POST /rest/user/login con contraseñas de un diccionario en menos de 1 minuto
   Entonces la regla genera una alerta con la IP del atacante y el número de intentos
-  Y la alerta tiene una hora coherente con la evidencia del Red Team (±5 s)
+  Y la alerta tiene una hora coherente con la evidencia de la PoC (±5 s)
   Y con el código corregido, a partir del intento 11 la API responde HTTP 429
   Y la aplicación registra cada intento fallido con usuario objetivo e IP real
 ```
@@ -764,7 +1074,29 @@ Escenario: un atacante fabrica un token de administrador
   Y la clave privada ya no está en el repositorio ni en la imagen
 ```
 
-**Línea base esperada:** dependiendo de la versión de `express-jwt`, el token sin firma o uno firmado con la clave publicada en `lib/insecurity.ts:21` es aceptado. A confirmar por el Red Team. Una firma válida hecha con la clave filtrada no es detectable por el WAF: solo la rotación de la clave (RS-04) la neutraliza.
+**Línea base esperada:** dependiendo de la versión de `express-jwt`, el token sin firma o uno firmado con la clave publicada en `lib/insecurity.ts:21` es aceptado. A confirmar con la PoC de H2. Una firma válida hecha con la clave filtrada no es detectable por el WAF: solo la rotación de la clave (RS-04) la neutraliza.
+
+---
+
+### AC-08 · Total negativo manipulando la cantidad del carrito
+
+| Campo | Valor |
+|---|---|
+| Agente | TA-2 |
+| Amenazas | T-ORD-02, T-SPA-04, T-LOG-04 |
+| Clasificación | A06:2025 Insecure Design · CWE-840 |
+| Requisitos | RS-26, RS-13 |
+
+```gherkin
+Escenario: un cliente intenta que la tienda le pague manipulando la cantidad
+  Dado que el cliente tiene una sesión válida y un producto en su carrito
+  Cuando envía PUT /api/BasketItems/<id> con {"quantity": -100}
+  Entonces la API responde HTTP 400 y la cantidad guardada no cambia
+  Y el total del carrito en el checkout nunca es negativo
+  Y la aplicación registra el intento rechazado con el usuario, el recurso y la IP real
+```
+
+**Línea base esperada:** la API acepta la cantidad negativa y el checkout calcula un total negativo (`routes/order.ts:71-136`). Ni el WAF ni el SIEM lo detectan: es JSON válido, sin patrones de ataque, y responde 200. Es el caso de BO-3 (§4.3.3), donde la protección depende solo del código.
 
 ---
 
@@ -779,8 +1111,9 @@ Escenario: un atacante fabrica un token de administrador
 | AC-05 Reconocimiento | T-CFG-01, T-FS-01 | RS-11, RS-15, RS-18, RS-23 | DAST | CRS 913xxx · regla de escaneo | Opcional |
 | AC-06 IDOR | T-ORD-01 | RS-03, RS-13, RS-23 | — | Brecha (sin señal) | Candidata |
 | AC-07 JWT | T-AUTH-02/03 | RS-04, RS-15, RS-18 | Escaneo de secretos | Regla propia `alg:none` | Opcional |
+| AC-08 Cantidad negativa | T-ORD-02 | RS-26, RS-13 | — | Brecha (sin señal) | Candidata |
 
-Las filas de esta tabla se convierten en filas de la matriz de trazabilidad del informe final cuando el Red Team confirme cada hallazgo en H2.
+Las filas de esta tabla se convierten en filas de la matriz de trazabilidad del informe final cuando cada hallazgo se confirme con su PoC en H2.
 
 ---
 
@@ -794,6 +1127,7 @@ Pendientes de validar con todo el equipo antes de cerrar el hito:
 4. **Evasión por `text/plain` (T-WAF-02):** hipótesis por revisión de código; se confirma con una prueba en `DetectionOnly`.
 5. **Elastic Cloud:** si algún integrante no puede correr Elastic local, TB5/TB6 pasan por Internet y hay que agregar TLS y API keys al modelo.
 6. **Casos de abuso para H4:** el grupo debe elegir al menos dos de los marcados como "Candidata" en §8 para corregir con IA.
+7. **Instancia del reconocimiento (§3.6):** se hizo contra una instancia sin WAF en `127.0.0.1:3000`. Sirve para describir la aplicación, pero no como evidencia de detección o bloqueo (§3.4); esa evidencia se genera en H3 a través del WAF en `:8080`.
 
 ---
 
