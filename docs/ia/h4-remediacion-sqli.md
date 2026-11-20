@@ -154,6 +154,6 @@ Commit: `fix(h4): consultas parametrizadas en login y búsqueda (V-01, V-02)` ·
 | Control funcional: login `admin@juice-sh.op` / `admin123` | HTTP 200 con token | **HTTP 200** ✅ |
 | Control funcional: búsqueda `apple` y catálogo (`q=`) | ≥1 producto y catálogo completo | **3 productos** con `apple` y **46 productos** en el catálogo ✅ |
 | SAST en el pipeline: `sast.error` | Menor que 40; sin hallazgos en `login.ts:34` ni `search.ts:23` | **40 → 36** ✅ · [run #16 (44679006959)](https://github.com/josuemj/juice-shop/actions/runs/44679006959), 6 jobs en verde (gate en modo reporte) |
-| Gate en `enforce` tras el ratchet | Verde | `baseline.json` en `"mode": "enforce"` con `sast.error` 36. Run en `enforce`: *pendiente del siguiente push* |
+| Gate en `enforce` tras el ratchet | Verde | `baseline.json` en `"mode": "enforce"` con `sast.error` 36 (commit `a9e48e06a`). **"Modo: enforce · Resultado: PASA"** ✅, 6 jobs en verde · [run #17 (44681610092)](https://github.com/josuemj/juice-shop/actions/runs/44681610092) |
 
 El detalle de la re-prueba y del pipeline está en [`docs/hito-4/remediacion-h4.md`](../hito-4/remediacion-h4.md).
