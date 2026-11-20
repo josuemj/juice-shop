@@ -54,22 +54,100 @@ El uso de IA está permitido según la guía de la UVG. En el Hito 4 es obligato
 
 | Hito | Contenido | Carpeta | Estado |
 |---|---|---|---|
-| Configuración | Grupos y roles, repositorio, entorno levantado (Juice Shop responde por el WAF en `localhost:8080`) | `entorno-blue-team/` | Pendiente |
-| H1 | PASTA etapas 1-4, DFD con límites de confianza, STRIDE, requisitos de seguridad, 5 casos de abuso, reconocimiento | `docs/hito-1/` | Pendiente |
-| H2 | Workflow con SAST, SCA, SBOM (CycloneDX con Syft) y DAST (ZAP baseline), security gate, 4 vulnerabilidades explotadas | `docs/hito-2/`, `.github/workflows/` | En progreso |
-| H3 | Logs del WAF en Elastic, 3 reglas de detección, dashboard, WAF en DetectionOnly y luego en On | `docs/hito-3/`, `blue-team/` | Pendiente |
-| H4 | Corrección de 2 vulnerabilidades con IA, auditoría del código generado, re-prueba | `docs/hito-4/`, `docs/ia/` | Pendiente |
+| Configuración | Grupos y roles, repositorio, entorno levantado (Juice Shop responde por el WAF en `localhost:8080`) | `entorno-blue-team/` | Completado |
+| H1 | PASTA etapas 1-4, DFD con límites de confianza, STRIDE, requisitos de seguridad, 5 casos de abuso, reconocimiento | `docs/hito-1/` | Completado |
+| H2 | Workflow con SAST, SCA, SBOM (CycloneDX con Syft) y DAST (ZAP baseline), security gate, 4 vulnerabilidades explotadas | `docs/hito-2/`, `.github/workflows/` | Completado (gate en modo enforce desde H4) |
+| H3 | Logs del WAF en Elastic, 3 reglas de detección, dashboard, WAF en DetectionOnly y luego en On | `docs/hito-3/`, `blue-team/` | En progreso (falta dashboard de Kibana y evidencia de V-03 por `/rest/track-order/` y de la alerta H3-03) |
+| H4 | Corrección de 2 vulnerabilidades con IA, auditoría del código generado, re-prueba | `docs/hito-4/`, `docs/ia/` | Completado |
 | Informe final | Línea de tiempo, matriz de trazabilidad, riesgo residual, lecciones aprendidas | `docs/informe-final/` | Pendiente |
 
 ## Cómo levantar el entorno
 
-Pendiente. Esta sección se completa cuando el Blue Team entregue `entorno-blue-team/`. Debe incluir como mínimo:
+El entorno está en `entorno-blue-team/`: Juice Shop detrás de un WAF (ModSecurity + OWASP CRS) y un SIEM mínimo (Elasticsearch + Kibana + Filebeat). Juice Shop no publica puertos al host: la única forma de llegar a la app es pasando por el WAF.
 
-1. Requisitos (Docker, Docker Compose, memoria disponible para Elasticsearch).
-2. Comando para levantar el entorno.
-3. URL de acceso a Juice Shop a través del WAF: `http://localhost:8080`.
-4. URL de Kibana.
-5. Alternativa con Elastic Cloud si Elastic no corre localmente.
+```
+Navegador / Red Team --> :8080 WAF (ModSecurity + CRS) --> juice-shop:3000
+                               |
+                               +-- audit.log (JSON) --> Filebeat --> Elasticsearch <-- Kibana :5601
+```
+
+### Requisitos
+
+- Docker Desktop (o Docker Engine con Docker Compose v2) con **al menos 4 GB de RAM** asignados a Docker; **6 GB recomendado**. Si la laptop tiene poca memoria, bajar `ES_HEAP` a `512m` en `.env`.
+- En Linux, Elasticsearch necesita: `sudo sysctl -w vm.max_map_count=262144`.
+- En Windows, los scripts (`verificar.sh`, `cargar-reglas.sh`, PoC) se corren desde Git Bash o WSL.
+
+### Levantar el entorno
+
+```bash
+cd entorno-blue-team
+cp .env.example .env
+# Editar .env: poner ELASTIC_PASSWORD y KIBANA_PASSWORD,
+# y KIBANA_ENCRYPTION_KEY con 32 caracteres o más
+docker compose up -d
+# Esperar 1-3 minutos (Elasticsearch y Kibana tardan en arrancar)
+docker compose ps
+./verificar.sh
+```
+
+`.env` está en `.gitignore`: las contraseñas nunca se versionan. `verificar.sh` comprueba que Juice Shop responde por el WAF, que `:3000` no está expuesto, que una petición con SQLi se comporta según el modo del WAF, que el evento llega a Elasticsearch y que Kibana responde.
+
+| Servicio | URL |
+|---|---|
+| Juice Shop (a través del WAF) | `http://localhost:8080` |
+| Kibana | `http://localhost:5601` (usuario `elastic`, contraseña `ELASTIC_PASSWORD` de `.env`) |
+
+Por defecto los puertos quedan en `127.0.0.1`. Con `WAF_BIND=0.0.0.0` en `.env`, otras laptops de la misma red pueden atacar el WAF.
+
+### Modo del WAF
+
+El modo se controla con `MODSEC_RULE_ENGINE` en `.env`: `DetectionOnly` (solo registra) u `On` (bloquea con 403). Después de cambiarlo:
+
+```bash
+docker compose up -d --force-recreate waf
+```
+
+### Reglas de detección del SIEM
+
+Con el entorno levantado, desde la raíz del repositorio:
+
+```bash
+bash blue-team/reglas-siem/cargar-reglas.sh
+```
+
+Crea o actualiza en Kibana las reglas `h3-*.json` (Security > Rules > Detection rules).
+
+### Alternativa con Elastic Cloud
+
+Si Elasticsearch no corre localmente por falta de memoria:
+
+1. Crear un deployment en [cloud.elastic.co](https://cloud.elastic.co).
+2. En `filebeat/filebeat.yml`, reemplazar el bloque `output.elasticsearch` por:
+   ```yaml
+   cloud.id: "${ELASTIC_CLOUD_ID}"
+   cloud.auth: "elastic:${ELASTIC_PASSWORD}"
+   ```
+3. Agregar `ELASTIC_CLOUD_ID` a `.env` y poner en `ELASTIC_PASSWORD` la contraseña del deployment. Agregar también `ELASTIC_CLOUD_ID: ${ELASTIC_CLOUD_ID}` en `environment:` del servicio `filebeat` en `docker-compose.yml`.
+4. Levantar solo los servicios locales. El servicio `filebeat` tiene `depends_on` sobre `elasticsearch`, así que se arranca con `--no-deps` para no levantar el Elasticsearch local:
+   ```bash
+   docker compose up -d log-init juice-shop waf
+   docker compose up -d --no-deps filebeat
+   ```
+
+Con Elastic Cloud, Kibana se abre desde la URL del deployment. Los pasos 4 y 5 de `verificar.sh` y `cargar-reglas.sh` usan `localhost:9200` y `localhost:5601`, así que hay que cambiar esas URLs por las del deployment.
+
+### Probar el código del fork (H4)
+
+Por defecto el servicio `juice-shop` usa la imagen publicada (`JUICE_SHOP_IMAGE`). Para probar las correcciones del código, en `docker-compose.yml` comentar `image:` y descomentar el bloque `build:` del servicio `juice-shop` (`context: ..`, `dockerfile: Dockerfile`), y luego:
+
+```bash
+docker compose up -d --build juice-shop
+docker compose images juice-shop   # debe mostrar la imagen construida localmente
+```
+
+La primera construcción tarda porque instala dependencias y compila el frontend. Este cambio es para pruebas locales y no se versiona.
+
+### Reconocimiento sin WAF
 
 Para pruebas rápidas de reconocimiento, sin WAF ni SIEM, se puede levantar Juice Shop de forma aislada:
 
