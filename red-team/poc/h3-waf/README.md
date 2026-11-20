@@ -12,7 +12,7 @@ Data flow (del modelado de amenazas, `docs/hito-1/blue-team-h1.md` §4): el trá
 |---|---|---|---|---|---|---|
 | V-01 | SQLi login | BO-2 / SO-5 | F1→F3 (cuerpo JSON) | TB1 | **Sí** · CRS 942xxx | **403** |
 | V-02 | SQLi UNION | BO-2 / SO-5 | F1→F3 (query string) | TB1 | **Sí** · CRS 942xxx | **403** |
-| V-03 | DOM XSS | BO-5 / SO-5 | el `#` no llega; sí la API | TB1 | **Sí en la API** · 941xxx | **403** en la llamada API |
+| V-03 | XSS reflejado (track-order) | BO-5 / SO-5 | F1→F3 (path `/rest/track-order/<payload>`) | TB1 | **Sí** · CRS 941xxx | **403** |
 | V-04 | IDOR carrito | BO-3 / SO-1 | F3 petición legítima (sin payload) | TB2/TB3 | **No** | pasa (solo SIEM con log de app) |
 | V-05 | JWT forjado | BO-2 / SO-3 | F3 con firma válida de clave filtrada | TB1 | **No** (firma válida) | pasa (solo anomalía de uso) |
 | V-06 | Fuerza bruta | BO-2 / SO-6 | F3 N× 401 sin payload | TB1 | **No** por firma | pasa (regla de ráfaga del SIEM) |
