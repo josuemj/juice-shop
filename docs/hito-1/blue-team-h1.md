@@ -3,7 +3,7 @@
 **Equipo:** Sebastián Huertas, Gerson Ramírez, Juan Pablo Solís, Josué Marroquín
 **Metodología:** PASTA (Process for Attack Simulation and Threat Analysis), etapas 1 a 4, con STRIDE como taxonomía de amenazas por componente
 **Objeto de análisis:** OWASP Juice Shop v20.3.0 desplegado detrás del entorno `entorno-blue-team/` (ModSecurity + OWASP CRS 4.25 LTS, Filebeat, Elasticsearch y Kibana 8.19.24)
-**Versión:** 2.0 · 2026-11-16
+**Versión:** 2.1 · 2026-11-19
 
 ---
 
@@ -933,7 +933,7 @@ Escenario: un atacante intenta extraer correos y hashes desde la búsqueda de pr
   Dado que el WAF está en modo "On"
   Y que la regla "SQLi" está activa en Kibana
   Cuando el atacante solicita GET /rest/products/search?q= con el valor
-    qwert')) UNION SELECT id,email,password,'4','5','6','7','8','9' FROM Users--
+    qwert')) UNION SELECT id,email,password,'4','5','6','7','8','9','10' FROM Users--
     codificado en URL
   Entonces el WAF responde HTTP 403
   Y en filebeat-* existe un evento con url.original que contiene "UNION" y reglas 942xxx
@@ -942,6 +942,8 @@ Escenario: un atacante intenta extraer correos y hashes desde la búsqueda de pr
 ```
 
 **Línea base esperada:** la respuesta JSON devuelve correos y hashes MD5 de todos los usuarios.
+
+**Por qué 10 columnas:** el `UNION` necesita tantas columnas como la consulta original sobre `Products`, que en v20.3.0 tiene 10: `id`, `name`, `description`, `price`, `deluxePrice`, `image` y `alternateImages` (`models/product.ts:32-38`), más `createdAt`, `updatedAt` y `deletedAt`. Con 9 columnas SQLite rechaza la consulta y no hay exfiltración. Verificado con la evidencia de H2 (`red-team/evidencias/h2-V-02-sqli-union-search/response.json`).
 
 ---
 
