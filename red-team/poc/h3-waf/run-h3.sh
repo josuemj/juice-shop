@@ -133,7 +133,7 @@ IDS+=("V-02"); VECT+=("SQLi UNION exfiltración"); SEES+=("Sí (942xxx)"); OBS+=
 #   /rest/products/search?q=<payload> sería una petición ARTIFICIAL que el navegador
 #   de la víctima nunca manda. En track-order el navegador SÍ envía el payload por
 #   el path (track-order.service: encodeURIComponent -> GET /rest/track-order/<id>),
-#   que cruza el WAF y es la misma petición que dispara AC-03 del Blue Team.
+#   que cruza el WAF y es la misma petición que dispara AC-03 del Hito 1.
 # ----------------------------------------------------------------------------
 echo; echo "[V-03] XSS reflejado  GET /rest/track-order/<iframe src=javascript:alert(\`xss\`)>"
 d="$EVID/V-03-xss-track-order"; mkdir -p "$d"

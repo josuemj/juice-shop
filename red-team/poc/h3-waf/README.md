@@ -37,18 +37,37 @@ Dependencias del runner: `curl`, `python3` (parseo de JWT/JSON) y `node` (V-05, 
 
 Se corre **dos veces**: primero con el WAF en `DetectionOnly` (registra, no bloquea) y luego en
 `On` (bloquea). El script **detecta solo** en qué modo está y clasifica cada PoC.
-
 ```bash
 # --- Pasada 1: DetectionOnly (modo por defecto del .env) ---
 bash red-team/poc/h3-waf/run-h3.sh
+```
 
-# --- Pasada 2: modo bloqueo On ---
+**Pasada 2: modo bloqueo On.** Abrir `entorno-blue-team/.env` en cualquier editor y cambiar la línea
+`MODSEC_RULE_ENGINE=DetectionOnly` por `MODSEC_RULE_ENGINE=On`. Desde la terminal también se puede:
+
+```bash
+# Linux
+sed -i 's/^MODSEC_RULE_ENGINE=.*/MODSEC_RULE_ENGINE=On/' entorno-blue-team/.env
+# macOS
+sed -i '' 's/^MODSEC_RULE_ENGINE=.*/MODSEC_RULE_ENGINE=On/' entorno-blue-team/.env
+```
+
+```powershell
+# Windows (PowerShell)
+(Get-Content entorno-blue-team\.env) -replace '^MODSEC_RULE_ENGINE=.*', 'MODSEC_RULE_ENGINE=On' | Set-Content entorno-blue-team\.env
+```
+
+Luego recrear el WAF y volver a correr las PoC:
+
+```bash
 cd entorno-blue-team
-sed -i '' 's/^MODSEC_RULE_ENGINE=.*/MODSEC_RULE_ENGINE=On/' .env   # macOS; en Linux: sed -i 's/.../.../'
 docker compose up -d --force-recreate waf
 cd ..
 bash red-team/poc/h3-waf/run-h3.sh
 ```
+
+En Windows, `run-h3.sh` se ejecuta desde **Git Bash** y necesita `python3` y `node` instalados.
+Como el script solo ataca `localhost`, debe correr en la misma máquina donde está levantado el entorno.
 
 Variables opcionales: `BASE_URL` (def `http://localhost:8080`), `N` (intentos de V-06, def 30),
 `TARGET_BASKET` (carrito ajeno a leer en V-04, def 1).
