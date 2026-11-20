@@ -120,4 +120,23 @@ bash blue-team/falsos-positivos/generar-trafico-legitimo.sh
 # 4. Cambiar el WAF a modo On (bloqueo) para la demo
 #    en entorno-blue-team/.env: MODSEC_RULE_ENGINE=On
 cd entorno-blue-team && docker compose up -d --force-recreate waf
+
+# 5. Importar el dashboard a Kibana (ver §8)
+P=$(grep ^ELASTIC_PASSWORD entorno-blue-team/.env | cut -d= -f2)
+curl -s -u "elastic:$P" -H 'kbn-xsrf: true' \
+  -F file=@blue-team/consultas/dashboard-waf-h3.ndjson \
+  "http://localhost:5601/api/saved_objects/_import?overwrite=true"
 ```
+
+## 8. Dashboard del WAF / SIEM
+
+Dashboard **"WAF / SIEM — H3"** en Kibana, sobre el data view `filebeat-*`, con 4 paneles:
+
+| Panel | Qué muestra |
+|---|---|
+| Eventos del WAF en el tiempo | Volumen de peticiones registradas por el WAF (barras sobre `@timestamp`) |
+| Top reglas CRS | Reglas disparadas (`942`=SQLi, `941`=XSS, `913`=escáner…) por frecuencia |
+| Código de respuesta | `http.response.status_code`: **403 = bloqueado** por el WAF vs. el resto |
+| Top IPs de origen | `source.ip` con más actividad |
+
+![Dashboard WAF/SIEM H3](img/dashboard-waf-h3.jpg)
