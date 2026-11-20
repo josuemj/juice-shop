@@ -1,0 +1,33 @@
+{
+  "rule_id": "jsb-h3-02-xss",
+  "name": "H3-02 · XSS detectado por el WAF",
+  "description": "Alerta por cada petición en la que el WAF (OWASP CRS) disparó una regla de Cross-Site Scripting (familia 941xxx). Cubre AC-03 del H1 y la PoC V-03 del Red Team. En el XSS basado en DOM el payload viaja en el fragmento (#) y el WAF solo lo ve cuando la SPA lo envía a la API.",
+  "type": "query",
+  "language": "kuery",
+  "index": ["filebeat-*"],
+  "query": "tags : \"waf\" and modsec.transaction.messages.details.ruleId : 941*",
+  "severity": "medium",
+  "risk_score": 47,
+  "interval": "1m",
+  "from": "now-2m",
+  "max_signals": 100,
+  "enabled": true,
+  "tags": ["H3", "Blue Team", "WAF", "XSS", "OWASP A05:2025", "CWE-79"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0001", "name": "Initial Access", "reference": "https://attack.mitre.org/tactics/TA0001/" },
+      "technique": [
+        { "id": "T1190", "name": "Exploit Public-Facing Application", "reference": "https://attack.mitre.org/techniques/T1190/" }
+      ]
+    }
+  ],
+  "references": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html",
+    "https://coreruleset.org/docs/"
+  ],
+  "false_positives": [
+    "Contenido legítimo con etiquetas HTML o atributos (por ejemplo, reseñas con formato). Revisar modsec.transaction.messages.details.data y documentar la exclusión en docs/hito-3/."
+  ],
+  "note": "## Triage\n\n1. Revisar `url.original` y `modsec.transaction.messages.details.data` para ver el payload (por ejemplo `<iframe src=\"javascript:...\">`).\n2. `http.response.status_code`: 403 = bloqueado por el WAF; otro código = llegó a la aplicación.\n3. Aunque el WAF bloquee la llamada a la API, un XSS basado en DOM puede ejecutarse en el navegador igual: la corrección real está en el código (RS-02, H4).\n4. Buscar más actividad de la misma IP: `source.ip : <ip> and tags : \"waf\"`."
+}
