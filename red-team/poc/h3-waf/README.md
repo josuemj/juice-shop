@@ -37,7 +37,15 @@ Dependencias del runner: `curl`, `python3` (parseo de JWT/JSON) y `node` (V-05, 
 
 Se corre **dos veces**: primero con el WAF en `DetectionOnly` (registra, no bloquea) y luego en
 `On` (bloquea). El script **detecta solo** en qué modo está y clasifica cada PoC.
+
+Comando completo, de cero, desde la raíz del repo:
 ```bash
+# 0) Entorno (solo lo que el Red Team necesita: WAF + Juice Shop; sin SIEM)
+cd entorno-blue-team
+cp .env.example .env   # si no existe; rellenar ELASTIC_PASSWORD/KIBANA_PASSWORD/KIBANA_ENCRYPTION_KEY
+docker compose up -d log-init juice-shop waf
+cd ..
+
 # --- Pasada 1: DetectionOnly (modo por defecto del .env) ---
 bash red-team/poc/h3-waf/run-h3.sh
 ```
@@ -87,3 +95,26 @@ Variables opcionales: `BASE_URL` (def `http://localhost:8080`), `N` (intentos de
 
 El script **aborta** si `BASE_URL` no es loopback (`localhost` / `127.0.0.1`). Solo se ataca la
 instancia local del grupo. La evidencia se genera únicamente al ejecutar: nada está pre-rellenado.
+
+## Evidencia ejecutada (19-nov-2026)
+
+Corridas reales contra el entorno local, con el script ya corregido (ver bug abajo):
+
+- `red-team/evidencias/h3-detectiononly-redteam-h3-20261119T221524/` — pasada 1, `DetectionOnly`.
+- `red-team/evidencias/h3-on-redteam-h3-20261119T221546/` — pasada 2, `On`.
+
+Las 6 PoC dieron resultado en ambas pasadas, sin `n/d`. Resumen (`On`, el que importa para el
+bloqueo): V-01/02/03 → `403` bloqueadas por CRS 942xxx/941xxx. V-04/05/06 → pasan con `200`/`401`
+tal como se esperaba (el WAF no puede verlas: son petición legítima, firma válida o sin payload).
+
+**Bug corregido:** en una corrida anterior (commit `5d5b92fb7`, ya reemplazada), V-04 fallaba con
+`n/d` — el registro y login del customer de prueba sí funcionaban (ambos con JWT válido en
+`login-resp.json`), pero la extracción del token con `python3 -c "...json.load..."` devolvía vacío
+y el script no decía por qué. Se corrigió así:
+- Los `curl` de registro/login ahora capturan su propio código HTTP (`-w '%{http_code}'`) y se
+  imprimen (`registro: HTTP ... · login: HTTP ...`).
+- La condición para intentar leer el carrito ajeno ahora exige `login_code = 200` **y** token no
+  vacío, no solo el token.
+- El `stderr` de la extracción con `python3` ya no se descarta con `2>/dev/null`: se guarda en
+  `token-extraction.err` dentro de la carpeta de evidencia de V-04 si algo realmente falla, para
+  poder diagnosticarlo la próxima vez en vez de un `n/d` sin explicación.
