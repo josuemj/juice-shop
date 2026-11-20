@@ -15,6 +15,47 @@ filebeat.inputs:
           add_error_key: true
 
 processors:
+  # RS-19 (H1): enmascara secretos antes de enviarlos a Elasticsearch.
+  # De los JWT se conserva solo el encabezado (público, indica el "alg") para
+  # poder detectar tokens manipulados sin guardar el token. Va antes de
+  # copy_fields para que las copias ECS también queden enmascaradas.
+  - script:
+      lang: javascript
+      id: enmascarar_secretos
+      source: |
+        var JWT = /^(Bearer\s+)?([A-Za-z0-9_-]+)\.[A-Za-z0-9._-]*$/;
+        var COOKIE_TOKEN = /(token=)([A-Za-z0-9_-]+)\.[A-Za-z0-9._-]*/g;
+        var BODY_PASSWORD = /("[^"]*password[^"]*"\s*:\s*")[^"]*"/gi;
+        var URL_PASSWORD = /([?&](?:current|new|repeat|password)=)[^&]*/gi;
+
+        function enmascararJwt(valor) {
+          var m = JWT.exec(valor);
+          return m ? (m[1] || '') + m[2] + '.[REDACTED]' : '[REDACTED]';
+        }
+
+        function enmascararHeaders(event, campo) {
+          var headers = event.Get(campo);
+          if (!headers) return;
+          for (var nombre in headers) {
+            var n = nombre.toLowerCase();
+            var valor = String(headers[nombre]);
+            if (n === 'authorization') {
+              event.Put(campo + '.' + nombre, enmascararJwt(valor));
+            } else if (n === 'cookie' || n === 'set-cookie') {
+              event.Put(campo + '.' + nombre, valor.replace(COOKIE_TOKEN, '$1$2.[REDACTED]'));
+            }
+          }
+        }
+
+        function process(event) {
+          enmascararHeaders(event, 'modsec.transaction.request.headers');
+          enmascararHeaders(event, 'modsec.transaction.response.headers');
+          var body = event.Get('modsec.transaction.request.body');
+          if (body) event.Put('modsec.transaction.request.body', String(body).replace(BODY_PASSWORD, '$1[REDACTED]"'));
+          var uri = event.Get('modsec.transaction.request.uri');
+          if (uri) event.Put('modsec.transaction.request.uri', String(uri).replace(URL_PASSWORD, '$1[REDACTED]'));
+        }
+
   # Copia los campos clave a nombres ECS para que las reglas y el dashboard
   # puedan usar source.ip, url.original, etc.
   - copy_fields:

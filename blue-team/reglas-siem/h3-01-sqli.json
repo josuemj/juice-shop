@@ -1,0 +1,33 @@
+{
+  "rule_id": "jsb-h3-01-sqli",
+  "name": "H3-01 · Inyección SQL detectada por el WAF",
+  "description": "Alerta por cada petición en la que el WAF (OWASP CRS) disparó una regla de inyección SQL (familia 942xxx). Cubre AC-01 (SQLi en el login) y AC-02 (SQLi UNION en la búsqueda) del H1, y las PoC V-01 y V-02 del Red Team.",
+  "type": "query",
+  "language": "kuery",
+  "index": ["filebeat-*"],
+  "query": "tags : \"waf\" and modsec.transaction.messages.details.ruleId : 942*",
+  "severity": "high",
+  "risk_score": 73,
+  "interval": "1m",
+  "from": "now-2m",
+  "max_signals": 100,
+  "enabled": true,
+  "tags": ["H3", "Blue Team", "WAF", "SQLi", "OWASP A05:2025", "CWE-89"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0001", "name": "Initial Access", "reference": "https://attack.mitre.org/tactics/TA0001/" },
+      "technique": [
+        { "id": "T1190", "name": "Exploit Public-Facing Application", "reference": "https://attack.mitre.org/techniques/T1190/" }
+      ]
+    }
+  ],
+  "references": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+    "https://coreruleset.org/docs/"
+  ],
+  "false_positives": [
+    "Texto legítimo con comillas, guiones dobles o palabras SQL (por ejemplo, reseñas o búsquedas). Revisar modsec.transaction.messages.details.data y documentar la exclusión en docs/hito-3/."
+  ],
+  "note": "## Triage\n\n1. Revisar `url.original`, `http.request.method` y `modsec.transaction.messages.details.data` (fragmento que disparó la regla).\n2. `http.response.status_code`: 403 = bloqueado por el WAF (modo On); 200/401/500 = la petición llegó a la aplicación (modo DetectionOnly).\n3. Buscar más actividad de la misma IP: `source.ip : <ip> and tags : \"waf\"`.\n4. Un 500 tras la inyección indica que el payload llegó a la base de datos (ver T-CFG-03)."
+}

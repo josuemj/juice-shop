@@ -1,0 +1,40 @@
+{
+  "rule_id": "jsb-h3-03-rafaga-login-por-ip",
+  "name": "H3-03 · Ráfaga de logins fallidos por IP",
+  "description": "Alerta cuando una misma IP acumula 20 o más logins fallidos (HTTP 401 en POST /rest/user/login) en 1 minuto. Cubre AC-04 del H1 y la PoC V-06 del Red Team. El CRS no detecta la fuerza bruta porque las peticiones no traen payload: esta regla es la única señal.",
+  "type": "threshold",
+  "language": "kuery",
+  "index": ["filebeat-*"],
+  "query": "tags : \"waf\" and url.original : \"/rest/user/login\" and http.request.method : \"POST\" and http.response.status_code : 401",
+  "threshold": { "field": ["source.ip"], "value": 20 },
+  "severity": "high",
+  "risk_score": 73,
+  "interval": "1m",
+  "from": "now-1m",
+  "max_signals": 100,
+  "enabled": true,
+  "tags": ["H3", "Blue Team", "WAF", "Fuerza bruta", "OWASP A07:2025", "CWE-307"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0006", "name": "Credential Access", "reference": "https://attack.mitre.org/tactics/TA0006/" },
+      "technique": [
+        {
+          "id": "T1110",
+          "name": "Brute Force",
+          "reference": "https://attack.mitre.org/techniques/T1110/",
+          "subtechnique": [
+            { "id": "T1110.001", "name": "Password Guessing", "reference": "https://attack.mitre.org/techniques/T1110/001/" }
+          ]
+        }
+      ]
+    }
+  ],
+  "references": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html"
+  ],
+  "false_positives": [
+    "Varios usuarios legítimos detrás de la misma IP (NAT). En el laboratorio todo el tráfico del host llega con la IP de la red de Docker (172.x.0.1), por lo que la regla agrupa a todos los clientes de esa laptop."
+  ],
+  "note": "## Triage\n\n1. Ver los intentos de la IP: `source.ip : <ip> and url.original : \"/rest/user/login\"`.\n2. Revisar si alguno terminó en HTTP 200 (contraseña adivinada): `source.ip : <ip> and url.original : \"/rest/user/login\" and http.response.status_code : 200`.\n3. El WAF no bloquea esta actividad (no hay payload). La contención real es rate limiting en la aplicación (RS-06, H4) o bloquear la IP.\n4. Umbral: 20 fallos en 1 minuto. Un usuario legítimo rara vez supera 5."
+}
