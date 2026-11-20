@@ -1,129 +1,159 @@
-# Hito 4 · Remediación con IA (V-01 y V-02)
+# Uso de IA · Hito 4 — Remediación de V-01 y V-02 (SQL injection)
 
-**Rama:** `hito-4` · **Fecha de la re-prueba:** 2026-11-19
-**Registro de uso de IA:** [`docs/ia/h4-remediacion-sqli.md`](../ia/h4-remediacion-sqli.md) · **Plan:** [`plan-h4.md`](plan-h4.md)
+Registro del uso de IA en el Hito 4, según la guía de la UVG y el requisito del proyecto: herramienta, prompt, respuesta y cambios realizados. La evaluación de la respuesta (§6) es la auditoría del código generado.
+
+| Campo | Valor |
+|---|---|
+| Fecha | 2026-11-19 |
+| Responsable | Juan Pablo Solís |
+| Herramientas | **Claude Code** (Anthropic) para generar y probar los fixes. **Claude** (claude.ai) para revisar el plan del H4 antes de pedir los cambios |
+| Vulnerabilidades | V-01 · SQLi en login (`routes/login.ts:34`) · V-02 · SQLi UNION en búsqueda (`routes/search.ts:23`) |
+| Clasificación | A05:2025 Injection · CWE-89 |
+| Plan de referencia | [`docs/hito-4/plan-h4.md`](../hito-4/plan-h4.md) |
+| Rama | `hito-4` |
 
 ---
 
-## 1. Resumen
+## 1. Cómo se usó la IA
 
-Se corrigieron **en el código** las dos inyecciones SQL explotadas en H2, con ayuda de un asistente de IA (Claude Code), y se auditó el código generado antes de integrarlo.
+1. **Revisión del plan (Claude, claude.ai).** Antes de pedir los cambios se revisó el plan del H4. La revisión detectó que el codefix de referencia de Juice Shop para V-02 (`LIKE '%:criteria%'`) no funciona con la versión de Sequelize del proyecto, y que la re-prueba propuesta podía dar falsos "corregido" (PoC apuntando a `:3000`, falta de `python3` en Git Bash, evidencia sobrescrita). El plan se corrigió antes de usarlo.
+2. **Generación de los fixes (Claude Code).** Con el plan corregido como contexto, se pidió a Claude Code que aplicara los dos cambios sin hacer commit y que justificara y verificara cada uno (§2 y §3).
+3. **Revisión humana.** Se revisó el diff línea por línea antes de autorizar el commit (§6).
 
-| ID | Vulnerabilidad | Archivo | Antes (H2) | Después (H4) |
-|---|---|---|---|---|
-| **V-01** | SQLi en el login | `routes/login.ts:34` | HTTP 200, JWT de `admin@juice-sh.op` (rol `admin`) | **HTTP 401, sin token** |
-| **V-02** | SQLi UNION en la búsqueda | `routes/search.ts:23` | HTTP 200, **25 usuarios** exfiltrados (correo y hash MD5) | **HTTP 200, 0 filas** |
+## 2. Prompt (textual)
 
-La re-prueba se hizo con el WAF en **DetectionOnly**: el WAF registró los ataques pero no los bloqueó. Lo que los frenó fue **el código corregido**, no el WAF. La tienda siguió funcionando: login legítimo, búsqueda y catálogo completo.
+```
+Estamos en el fork del grupo de OWASP Juice Shop para el proyecto final del curso
+Desarrollo Seguro (Hito 4: remediación con IA). En ESTE fork el objetivo es eliminar
+vulnerabilidades, no conservarlas.
 
-## 2. Cambios en el código
+Contexto obligatorio: lee docs/hito-4/plan-h4.md completo y sigue la sección
+"Cambios de código (los 2 fixes)".
 
-Las dos consultas pasan de interpolar la entrada del usuario dentro del SQL a **consultas parametrizadas de Sequelize**. No se agregaron dependencias.
+Tarea:
+1. Corrige V-01 en routes/login.ts:34 (SQL injection en el login) usando una consulta
+   parametrizada con `bind`, como dice el plan.
+2. Corrige V-02 en routes/search.ts:23 (SQL injection con UNION en la búsqueda) usando
+   `replacements` con `LIKE :criteria` y los comodines % en el VALOR
+   (`criteria: \`%${criteria}%\``). NO uses el patrón `LIKE '%:criteria%'` del codefix
+   de referencia: con Sequelize 6.37 no reemplaza parámetros dentro de comillas y la
+   búsqueda devuelve 0 productos.
+3. No cambies nada más de esas funciones (manejo de errores, truncado a 200 caracteres,
+   bloques de verificación de retos, map de req.__).
 
-### V-01 · `routes/login.ts:34` (parámetros `bind`)
+Restricciones:
+- AGENTS.md pide correr el RSN y actualizar data/static/codefixes/ cuando se toca código
+  de un reto. En este proyecto NO aplica: no corras `npm run rsn`, no modifiques
+  data/static/codefixes/, data/static/challenges.yml ni .ai/. Romper los retos
+  loginAdminChallenge y unionSqlInjectionChallenge es esperado.
+- No agregues dependencias ni modifiques package.json.
+- No hagas commit. Muéstrame el diff y espera mi confirmación.
+
+Al terminar, explícame:
+- El diff exacto de los dos archivos.
+- Por qué cada cambio elimina la inyección.
+- Qué casos legítimos verificaste que siguen funcionando (login con credenciales
+  correctas, búsqueda "apple", búsqueda vacía que carga el catálogo).
+- Si sugeriste alguna dependencia o patrón que hayas descartado, y por qué.
+```
+
+## 3. Respuesta de la IA (textual)
+
+> Corregí los dos archivos y no hice commit. Probé las consultas con Sequelize 6.37.7 y SQLite: los dos ataques ya no funcionan y los casos legítimos dan lo mismo que antes. No compilé el TypeScript ni levanté la app, porque el repo no tiene node_modules.
+>
+> git status muestra solo routes/login.ts y routes/search.ts modificados. No toqué package.json, data/static/codefixes/, challenges.yml ni .ai/, y no corrí npm run rsn.
+>
+> **Diff exacto:** *(ver §4)*
+>
+> Cambia una línea por archivo. El resto de cada función quedó igual: el manejo de errores (.catch), el truncado a 200 caracteres, los bloques de los retos y el map de req.__. Dejé los comentarios vuln-code-snippet al final de la línea para que el diff sea mínimo; a Semgrep no le afectan.
+>
+> **Por qué cada cambio elimina la inyección**
+>
+> V-01 (bind): la consulta es ahora un texto fijo con $1 y $2. El email y el hash viajan aparte a SQLite como parámetros, así que la base nunca los lee como SQL. Una comilla en ' OR 1=1-- se compara como parte del email y no cierra la cadena.
+>
+> V-02 (replacements): la consulta también es fija, con :criteria. Sequelize pone el valor como un literal de texto escapado: las comillas se duplican, así que qwert')) no puede cerrar los paréntesis ni agregar el UNION. Los comodines % van dentro del valor, no en la consulta, así que el marcador queda fuera de comillas y Sequelize sí lo reemplaza.
+>
+> **Lo que verifiqué**
+>
+> | Caso | Antes | Después |
+> |---|---|---|
+> | Login `' OR 1=1--` (PoC de V-01) | sesión de admin | null → 401 |
+> | Login `admin@juice-sh.op'--` | — | null |
+> | Login `admin@juice-sh.op` / `admin123` (correcto) | usuario | usuario ✅ |
+> | Login admin con contraseña incorrecta | — | null ✅ |
+> | Login con comilla legítima (`o'brien@…`) | — | usuario ✅ |
+> | Email que no es texto (`["a"]`, `{"a":1}`) o cuerpo vacío | — | null, sin error |
+> | Búsqueda con el UNION de V-02 | 3 filas de Users (email y hash) | 0 filas ✅ |
+> | Búsqueda `""` (la que usa la tienda para cargar el catálogo) | — | catálogo completo ✅ |
+> | Búsqueda `"apple"` | — | Apple Juice ✅ |
+> | Búsqueda `"monkeys"` (coincide en la descripción) | — | Banana Juice ✅ |
+> | Búsqueda con comilla (`o'`) | — | 0 filas, sin error |
+>
+> Cómo se hizo la prueba: en una carpeta aparte instalé sequelize@6.37.7 y sqlite3@5.1.7, las mismas que pide package.json. Ahí creé tablas Users y Products en memoria y corrí las consultas viejas, las nuevas y la del codefix de referencia. No probé la app completa: falta la re-prueba del Red Team contra el contenedor que indica el plan (V-01 → 401, V-02 → 0 filas) y compilar el TypeScript con npm run build:server, que también se hace al construir la imagen.
+>
+> Una búsqueda con % o _ sigue funcionando como comodín de LIKE: "100%" encuentra "Apple Juice (1000ml)". Eso ya pasaba antes y no es una inyección, porque solo cambia qué productos coinciden, no la consulta.
+>
+> **Patrones descartados y dependencias**
+>
+> LIKE '%:criteria%' (el codefix de referencia): lo probé y lo descarté. Con Sequelize 6.37.7 devuelve 0 filas tanto para "" como para "apple", porque el marcador está entre comillas y no se reemplaza. Confirma el hallazgo del plan.
+>
+> Dependencias nuevas: no sugerí ninguna (nada de validadores ni ORMs extra). Los dos fixes usan Sequelize, que ya estaba. sequelize y sqlite3 solo se instalaron en la carpeta temporal para probar y no entraron al repo.
+>
+> Como esperaba el plan, esto rompe los retos loginAdminChallenge y unionSqlInjectionChallenge. También rompe dbSchemaChallenge, que usa la misma línea de la búsqueda.
+>
+> ¿Hago el commit con -s y sin la línea Co-Authored-By, como pide el plan?
+
+## 4. Cambios aplicados (diff)
 
 ```diff
--    models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: UserModel, plain: true })
-+    models.sequelize.query('SELECT * FROM Users WHERE email = $1 AND password = $2 AND deletedAt IS NULL', { bind: [req.body.email || '', security.hash(req.body.password || '')], model: UserModel, plain: true })
+--- a/routes/login.ts
++++ b/routes/login.ts
+@@ -31,7 +31,7 @@ export function login () {
+   return (req: Request, res: Response, next: NextFunction) => {
+     verifyPreLoginChallenges(req) // vuln-code-snippet hide-line
+-    models.sequelize.query(`SELECT * FROM Users WHERE email = '${req.body.email || ''}' AND password = '${security.hash(req.body.password || '')}' AND deletedAt IS NULL`, { model: UserModel, plain: true }) // vuln-code-snippet vuln-line loginAdminChallenge loginBenderChallenge loginJimChallenge
++    models.sequelize.query('SELECT * FROM Users WHERE email = $1 AND password = $2 AND deletedAt IS NULL', { bind: [req.body.email || '', security.hash(req.body.password || '')], model: UserModel, plain: true }) // vuln-code-snippet vuln-line loginAdminChallenge loginBenderChallenge loginJimChallenge
+
+--- a/routes/search.ts
++++ b/routes/search.ts
+@@ -20,7 +20,7 @@ export function searchProducts () {
+     let criteria: any = req.query.q === 'undefined' ? '' : req.query.q ?? ''
+     criteria = (criteria.length <= 200) ? criteria : criteria.substring(0, 200)
+-    models.sequelize.query(`SELECT * FROM Products WHERE ((name LIKE '%${criteria}%' OR description LIKE '%${criteria}%') AND deletedAt IS NULL) ORDER BY name`) // vuln-code-snippet vuln-line unionSqlInjectionChallenge dbSchemaChallenge
++    models.sequelize.query('SELECT * FROM Products WHERE ((name LIKE :criteria OR description LIKE :criteria) AND deletedAt IS NULL) ORDER BY name', { replacements: { criteria: `%${criteria}%` } }) // vuln-code-snippet vuln-line unionSqlInjectionChallenge dbSchemaChallenge
 ```
 
-La consulta es un texto fijo con `$1` y `$2`. El correo y el hash viajan aparte como parámetros, así que la base de datos nunca los interpreta como SQL: la comilla de `' OR 1=1--` se compara como parte del correo y no cierra la cadena.
+Commit: `fix(h4): consultas parametrizadas en login y búsqueda (V-01, V-02)` · hash: `288cb16ce`
 
-### V-02 · `routes/search.ts:23` (parámetros `replacements`)
+## 5. Qué se aceptó, corrigió o rechazó
 
-```diff
--    models.sequelize.query(`SELECT * FROM Products WHERE ((name LIKE '%${criteria}%' OR description LIKE '%${criteria}%') AND deletedAt IS NULL) ORDER BY name`)
-+    models.sequelize.query('SELECT * FROM Products WHERE ((name LIKE :criteria OR description LIKE :criteria) AND deletedAt IS NULL) ORDER BY name', { replacements: { criteria: `%${criteria}%` } })
-```
-
-La consulta también es fija. Sequelize inserta el valor como un literal de texto escapado, así que `qwert'))` no puede cerrar los paréntesis ni agregar el `UNION`. Los comodines `%` van en el **valor** y no dentro de la consulta: el codefix de referencia de Juice Shop (`LIKE '%:criteria%'`) deja el marcador entre comillas y, con Sequelize 6.37, la búsqueda devuelve 0 productos siempre (ver §3).
-
-Commit: `fix(h4): consultas parametrizadas en login y búsqueda (V-01, V-02)` · hash: *pendiente*
-
-## 3. Auditoría del código generado por IA
-
-El detalle (prompt, respuesta textual y decisiones) está en [`docs/ia/h4-remediacion-sqli.md`](../ia/h4-remediacion-sqli.md). Resumen:
-
-| Control | Resultado |
-|---|---|
-| **Revisión manual** | Diff de una línea por archivo; consulta parametrizada; sin nuevas rutas de concatenación; se conservan el manejo de errores, el truncado a 200 caracteres y los bloques de los retos |
-| **Hallazgo 1 · fix de referencia roto** | Se rechazó el patrón `LIKE '%:criteria%'` (codefix `unionSqlInjectionChallenge_2_correct.ts`): con Sequelize 6.37.7 devuelve 0 productos para cualquier búsqueda, incluida la vacía que carga el catálogo. Eliminaba la inyección, pero rompía la tienda |
-| **Hallazgo 2 · instrucciones del repositorio para IA** | `AGENTS.md` pide correr el RSN y actualizar `data/static/codefixes/` al tocar código de un reto, para conservar las vulnerabilidades intencionales. El prompt las anuló de forma explícita; el asistente modificó solo `routes/login.ts` y `routes/search.ts` |
-| **Hallazgo 3 · impacto en retos** | El fix rompe los retos `loginAdminChallenge`, `unionSqlInjectionChallenge` y `dbSchemaChallenge`. Es esperado: el objetivo del fork es eliminar la vulnerabilidad |
-| **Slopsquatting** | Sin dependencias nuevas: `package.json` y `frontend/package.json` no cambian |
-| **Secretos** | Los cambios no agregan credenciales, llaves ni tokens. Escaneo del pipeline: *pendiente* (§6) |
-| **Compilación** | La imagen se construyó desde el código del fork sin errores, lo que confirma que el TypeScript corregido compila |
-| **SAST** | *Pendiente* del run del pipeline (§6) |
-
-## 4. Re-prueba de las PoC
-
-### 4.1 Condiciones
-
-| Condición | Cómo se verificó |
-|---|---|
-| Juice Shop construido **desde el código corregido** del fork | `docker compose up -d --build juice-shop` con el bloque `build:` del `docker-compose.yml`. `docker compose images juice-shop` muestra la imagen local `juice-shop-blue-juice-shop` (no `bkimminich/juice-shop:v20.3.0`) |
-| Ataques **a través del WAF** | `BASE_URL=http://localhost:8080`; la tienda responde 200 por el WAF |
-| WAF en **DetectionOnly** (no bloquea) | `docker compose exec waf printenv MODSEC_RULE_ENGINE` → `DetectionOnly` |
-| Evidencia separada de la de H2 | `EVID=red-team/evidencias/h4-retest-V-0x` |
-
-El cambio a `build:` en el `docker-compose.yml` fue solo para esta prueba local y no se versiona: el entorno del repositorio sigue usando la imagen publicada.
-
-### 4.2 Comandos
-
-```bash
-# Git Bash, desde la raíz del repositorio
-BASE_URL=http://localhost:8080 EVID=red-team/evidencias/h4-retest-V-01 bash red-team/poc/V-01-sqli-login/poc.sh
-BASE_URL=http://localhost:8080 EVID=red-team/evidencias/h4-retest-V-02 bash red-team/poc/V-02-sqli-union-search/poc.sh
-```
-
-### 4.3 Resultado
-
-| PoC | Payload | Antes (H2) | Después (H4) | Evidencia |
-|---|---|---|---|---|
-| V-01 | `{"email":"' OR 1=1--","password":"x"}` en `POST /rest/user/login` | 200 + JWT de admin | **401, sin token** ✅ | [`red-team/evidencias/h4-retest-V-01/`](../../red-team/evidencias/h4-retest-V-01/) |
-| V-02 | `qwert')) UNION SELECT id, email, password, '4','5','6','7','8','9','10' FROM Users--` en `GET /rest/products/search?q=` | 200 + 25 usuarios | **200, 0 filas** ✅ | [`red-team/evidencias/h4-retest-V-02/`](../../red-team/evidencias/h4-retest-V-02/) |
-
-Los mensajes de los scripts están escritos desde el punto de vista del atacante: en V-01, `FAIL: sin token` significa que **el ataque falló**; en V-02, `PASS: 0 filas` significa que **no se exfiltró nada**.
-
-**Hora:** 2026-11-19, 22:45:57 (V-01) y 22:46:10 (V-02), hora de Guatemala (UTC−6). Los scripts imprimen la hora en UTC (`2026-11-20 04:45:57 GMT`) porque Git Bash en Windows ignora la zona horaria del script.
-
-![Re-prueba de V-01 y V-02 contra el código corregido](img/h4-01-reprueba-poc.png)
-
-## 5. Control funcional (la tienda sigue funcionando)
-
-Un fix de seguridad que rompe la funcionalidad no es aceptable, y "0 filas" en V-02 también saldría si la búsqueda estuviera rota (como con el codefix de referencia). Por eso se probaron los casos legítimos en las mismas condiciones:
-
-| Caso legítimo | Esperado | Resultado |
+| Elemento | Decisión | Motivo |
 |---|---|---|
-| Login con `admin@juice-sh.op` / `admin123` | 200 con token | **200** ✅ |
-| Búsqueda `q=apple` | Al menos 1 producto | **3 productos**: Apple Juice (1000ml), Apple Pomace, Pineapple Juice (1000ml) ✅ |
-| Búsqueda vacía `q=` (la que usa la tienda para cargar el catálogo) | Catálogo completo | **46 productos** ✅ |
-| Tienda en el navegador (`http://localhost:8080`) | Se ve el catálogo | Se ve "All Products" con sus productos ✅ |
+| V-01 con `bind` (`$1`, `$2`) | **Aceptado** | Consulta fija; el email y el hash viajan como parámetros. Coincide con el codefix de referencia `loginAdminChallenge_4_correct.ts` |
+| V-02 con `replacements` y `LIKE :criteria`, comodines en el valor | **Aceptado** | Consulta fija; el valor se escapa como literal. Funciona con la búsqueda vacía, por nombre y por descripción |
+| Patrón `LIKE '%:criteria%'` (codefix de referencia `unionSqlInjectionChallenge_2_correct.ts`) | **Rechazado** | Con Sequelize 6.37.7 el marcador entre comillas no se reemplaza: devuelve 0 productos para cualquier búsqueda, incluida la vacía con la que la SPA carga el catálogo. Elimina la inyección, pero rompe la tienda (BO-1) |
+| Comentarios `// vuln-code-snippet vuln-line …` en las líneas corregidas | **Aceptado con nota** | Se conservan para que el diff sea mínimo. Son etiquetas del proyecto original para sus retos de código; en este fork ya no describen una línea vulnerable |
+| Dependencias nuevas | **Ninguna** | La IA no propuso paquetes; `package.json` y `frontend/package.json` no cambian |
 
-![Control funcional: login, búsqueda y catálogo](img/h4-02-control-funcional.png)
+## 6. Auditoría del código generado (hallazgos concretos)
 
-![La tienda con el código corregido muestra el catálogo](img/h4-03-catalogo-navegador.png)
+1. **El fix "canónico" de V-02 no servía.** La referencia del propio proyecto, y una sugerencia típica de IA, usa `LIKE '%:criteria%'`. Se verificó con Sequelize 6.37.7 y SQLite que devuelve 0 filas para `""` y para `"apple"`. Se detectó al revisar el plan, se prohibió en el prompt y Claude Code lo confirmó con su propia prueba. Lección: un fix de seguridad puede eliminar la vulnerabilidad y a la vez romper la funcionalidad; hay que probar los casos legítimos, no solo el ataque.
+2. **Las instrucciones para IA del repositorio empujaban en la dirección contraria.** `AGENTS.md` (y `.claude/CLAUDE.md`, que apunta a él) describe Juice Shop como vulnerable a propósito y pide correr el RSN y actualizar `data/static/codefixes/` al tocar código de un reto. Seguirlas habría mantenido la consistencia de los retos, no la seguridad. El prompt las anuló de forma explícita y el asistente lo respetó: `git status` solo muestra `routes/login.ts` y `routes/search.ts`. Lección: los archivos de instrucciones que vienen con un repositorio también son una entrada no confiable para un asistente de IA.
+3. **Impacto no previsto en el plan.** El asistente señaló que el fix de la búsqueda también rompe `dbSchemaChallenge`, que usa la misma línea. Es esperado y se agrega a las notas del H4.
+4. **Límite de la verificación de la IA.** Las pruebas de Claude Code se hicieron sobre tablas en memoria, no sobre la aplicación. No compiló el TypeScript ni levantó Juice Shop, y lo dijo explícitamente. La compilación y la re-prueba contra el contenedor se hacen aparte (§7).
+5. **Slopsquatting.** Sin dependencias nuevas. `sequelize@6.37.7` y `sqlite3@5.1.7` se instalaron solo en una carpeta temporal fuera del repositorio para la prueba; son las versiones que ya declara `package.json`.
+6. **Secretos.** Los cambios no agregan credenciales, llaves ni tokens. En el pipeline, `sast.error` no subió (40 → 36), así que no hay hallazgos nuevos de severidad `ERROR` que indiquen un secreto (ahí cuenta la regla `juice-shop-hardcoded-private-key`). El dato es el conteo agregado, no una revisión hallazgo por hallazgo; las reglas de `p/secrets` con severidad `WARNING` cuentan en `sast.warning`, que sigue en 39 (igual que en H2): tampoco hay hallazgos nuevos de severidad `WARNING` (§7).
 
-## 6. Pipeline y security gate
+## 7. Verificación fuera de la IA
 
 | Verificación | Esperado | Resultado |
 |---|---|---|
-| Run de *DevSecOps* en la rama `hito-4` | 6 jobs en verde | *pendiente* · run: *enlace pendiente* |
-| `sast.error` | Menor que la línea base (40); sin hallazgos en `login.ts:34` ni `search.ts:23` | *pendiente* |
-| Escaneo de secretos (`p/secrets`, `juice-shop-hardcoded-private-key`) | Sin hallazgos nuevos | *pendiente* |
-| Ratchet: `baseline.json` actualizado al nuevo `sast.error` | Commit con la justificación | *pendiente* |
-| Gate en `"mode": "enforce"` | Run final en verde | *pendiente* |
+| Construcción de la imagen desde el fork (compila el TypeScript) | Sin errores | Sin errores ✅ (imagen local `juice-shop-blue-juice-shop`) |
+| Re-prueba V-01 por el WAF en DetectionOnly (`BASE_URL=http://localhost:8080`) | HTTP 401, sin `authentication` | **HTTP 401, sin token** ✅ · 2026-11-19 22:45 (UTC−6) · [`red-team/evidencias/h4-retest-V-01/`](../../red-team/evidencias/h4-retest-V-01/) |
+| Re-prueba V-02 por el WAF en DetectionOnly | HTTP 200, 0 filas | **HTTP 200, 0 filas** ✅ · 2026-11-19 22:46 (UTC−6) · [`red-team/evidencias/h4-retest-V-02/`](../../red-team/evidencias/h4-retest-V-02/) |
+| Control funcional: login `admin@juice-sh.op` / `admin123` | HTTP 200 con token | **HTTP 200** ✅ |
+| Control funcional: búsqueda `apple` y catálogo (`q=`) | ≥1 producto y catálogo completo | **3 productos** con `apple` y **46 productos** en el catálogo ✅ |
+| SAST en el pipeline: `sast.error` | Menor que 40; sin hallazgos en `login.ts:34` ni `search.ts:23` | **40 → 36** ✅ · [run #16 (44679006959)](https://github.com/josuemj/juice-shop/actions/runs/44679006959), 6 jobs en verde (gate en modo reporte) |
+| Gate en `enforce` tras el ratchet | Verde | `baseline.json` en `"mode": "enforce"` con `sast.error` 36. Run en `enforce`: *pendiente del siguiente push* |
 
-## 7. Matriz de trazabilidad (V-01 y V-02)
-
-| Hallazgo | OWASP / CWE | CVSS v3.1 | ¿Lo detectó el pipeline? | ¿Lo detectó el SIEM? | ¿Lo bloqueó el WAF? | Corrección | Re-prueba |
-|---|---|---|---|---|---|---|---|
-| V-01 SQLi en login | A05:2025 / CWE-89 | 9.8 `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` | Sí, SAST (regla `juice-shop-sequelize-raw-query-interpolation`, `login.ts:34`) | Sí, regla H3-01 · Inyección SQL (CRS 942xxx) | Sí, 403 en modo On (H3, S4) | Consulta parametrizada con `bind` (IA, auditado) · commit *pendiente* | La PoC falla: 401 sin token, con WAF en DetectionOnly (2026-11-19 22:45) |
-| V-02 SQLi UNION | A05:2025 / CWE-89 | 7.5 `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N` | Sí, SAST (regla `juice-shop-sequelize-raw-query-interpolation`, `search.ts:23`) | Sí, regla H3-01 · Inyección SQL (CRS 942xxx) | Sí, 403 en modo On (H3, S4) | Consulta parametrizada con `replacements` (IA, auditado; se rechazó el codefix de referencia) · commit *pendiente* | La PoC falla: 0 filas, con WAF en DetectionOnly (2026-11-19 22:46); búsqueda legítima intacta |
-
-## 8. Notas
-
-- **Retos rotos a propósito:** el fix rompe `loginAdminChallenge`, `unionSqlInjectionChallenge` y `dbSchemaChallenge`. No se mantiene la solvencia de los retos ni el RSN de Juice Shop (su workflow se eliminó en H2): el objetivo es eliminar la vulnerabilidad.
-- **Tests unitarios de Juice Shop:** algunos esperan que la inyección funcione; no corren en nuestro pipeline, así que no bloquean.
-- **Defensa en profundidad:** con el código corregido, el WAF y la regla H3-01 siguen activos como segunda capa: un intento de inyección se sigue registrando y alertando aunque ya no tenga efecto. Se puede comprobar en Kibana filtrando `url.original : "/rest/user/login" and modsec.transaction.messages.details.ruleId : 942*` en el rango de la re-prueba.
-- **Comodines de LIKE:** una búsqueda con `%` o `_` sigue funcionando como comodín (por ejemplo, `100%`). Ya pasaba antes y no es una inyección: solo cambia qué productos coinciden, no la consulta.
+El detalle de la re-prueba y del pipeline está en [`docs/hito-4/remediacion-h4.md`](../hito-4/remediacion-h4.md).

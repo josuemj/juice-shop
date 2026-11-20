@@ -38,7 +38,7 @@ La consulta es un texto fijo con `$1` y `$2`. El correo y el hash viajan aparte 
 
 La consulta también es fija. Sequelize inserta el valor como un literal de texto escapado, así que `qwert'))` no puede cerrar los paréntesis ni agregar el `UNION`. Los comodines `%` van en el **valor** y no dentro de la consulta: el codefix de referencia de Juice Shop (`LIKE '%:criteria%'`) deja el marcador entre comillas y, con Sequelize 6.37, la búsqueda devuelve 0 productos siempre (ver §3).
 
-Commit: `fix(h4): consultas parametrizadas en login y búsqueda (V-01, V-02)` · hash: *pendiente*
+Commit: `fix(h4): consultas parametrizadas en login y búsqueda (V-01, V-02)` · hash: `288cb16ce`
 
 ## 3. Auditoría del código generado por IA
 
@@ -50,10 +50,10 @@ El detalle (prompt, respuesta textual y decisiones) está en [`docs/ia/h4-remedi
 | **Hallazgo 1 · fix de referencia roto** | Se rechazó el patrón `LIKE '%:criteria%'` (codefix `unionSqlInjectionChallenge_2_correct.ts`): con Sequelize 6.37.7 devuelve 0 productos para cualquier búsqueda, incluida la vacía que carga el catálogo. Eliminaba la inyección, pero rompía la tienda |
 | **Hallazgo 2 · instrucciones del repositorio para IA** | `AGENTS.md` pide correr el RSN y actualizar `data/static/codefixes/` al tocar código de un reto, para conservar las vulnerabilidades intencionales. El prompt las anuló de forma explícita; el asistente modificó solo `routes/login.ts` y `routes/search.ts` |
 | **Hallazgo 3 · impacto en retos** | El fix rompe los retos `loginAdminChallenge`, `unionSqlInjectionChallenge` y `dbSchemaChallenge`. Es esperado: el objetivo del fork es eliminar la vulnerabilidad |
-| **Slopsquatting** | Sin dependencias nuevas: `package.json` y `frontend/package.json` no cambian |
-| **Secretos** | Los cambios no agregan credenciales, llaves ni tokens. Escaneo del pipeline: *pendiente* (§6) |
+| **Slopsquatting** | Sin dependencias nuevas: `package.json` y `frontend/package.json` no cambian, y el SBOM del run #16 sigue en 2743 componentes (`sbom.components`, igual que en H2) |
+| **Secretos** | Los cambios no agregan credenciales, llaves ni tokens. En el pipeline, `sast.error` no subió (40 → 36), así que no hay hallazgos nuevos de severidad `ERROR` que indiquen un secreto, y `sast.warning` sigue en 39 (igual que en H2), sin hallazgos nuevos de severidad `WARNING`. El dato es el conteo agregado, no una revisión hallazgo por hallazgo (§6) |
 | **Compilación** | La imagen se construyó desde el código del fork sin errores, lo que confirma que el TypeScript corregido compila |
-| **SAST** | *Pendiente* del run del pipeline (§6) |
+| **SAST** | `sast.error` bajó de 40 a 36 en el run #16 por la corrección de V-01 y V-02 (§6) |
 
 ## 4. Re-prueba de las PoC
 
@@ -108,18 +108,18 @@ Un fix de seguridad que rompe la funcionalidad no es aceptable, y "0 filas" en V
 
 | Verificación | Esperado | Resultado |
 |---|---|---|
-| Run de *DevSecOps* en la rama `hito-4` | 6 jobs en verde | *pendiente* · run: *enlace pendiente* |
-| `sast.error` | Menor que la línea base (40); sin hallazgos en `login.ts:34` ni `search.ts:23` | *pendiente* |
-| Escaneo de secretos (`p/secrets`, `juice-shop-hardcoded-private-key`) | Sin hallazgos nuevos | *pendiente* |
-| Ratchet: `baseline.json` actualizado al nuevo `sast.error` | Commit con la justificación | *pendiente* |
-| Gate en `"mode": "enforce"` | Run final en verde | *pendiente* |
+| Run de *DevSecOps* en la rama `hito-4` | 6 jobs en verde | **6 jobs en verde** ✅ (gate en modo reporte) · [run #16 (44679006959)](https://github.com/josuemj/juice-shop/actions/runs/44679006959) |
+| `sast.error` | Menor que la línea base (40); sin hallazgos en `login.ts:34` ni `search.ts:23` | **40 → 36** ✅, por la corrección de V-01 y V-02 |
+| Escaneo de secretos (`p/secrets`, `juice-shop-hardcoded-private-key`) | Sin hallazgos nuevos | `sast.error` no subió (40 → 36): no hay hallazgos nuevos de severidad `ERROR` que indiquen un secreto (ahí cuenta `juice-shop-hardcoded-private-key`). El dato es el conteo agregado, no una revisión hallazgo por hallazgo; las reglas de `p/secrets` con severidad `WARNING` cuentan en `sast.warning`, que sigue en 39 (igual que en H2): tampoco hay hallazgos nuevos de severidad `WARNING` |
+| Ratchet: `baseline.json` actualizado al nuevo `sast.error` | Commit con la justificación | `sast.error` 40 → 36 (fix de H4) y `sca.backend.high` 20 → 16 (resolución de dependencias en el CI, no H4). `dast.high` se mantiene en 1 aunque el run dio 0: es una variación del spider de ZAP con `/redirect`, que sigue en el código. Detalle en [`pipeline-devsecops.md` §4.5](../hito-2/pipeline-devsecops.md) · commit *pendiente* |
+| Gate en `"mode": "enforce"` | Run final en verde | `"mode": "enforce"` en `baseline.json`. Run en `enforce`: *pendiente del siguiente push* |
 
 ## 7. Matriz de trazabilidad (V-01 y V-02)
 
 | Hallazgo | OWASP / CWE | CVSS v3.1 | ¿Lo detectó el pipeline? | ¿Lo detectó el SIEM? | ¿Lo bloqueó el WAF? | Corrección | Re-prueba |
 |---|---|---|---|---|---|---|---|
-| V-01 SQLi en login | A05:2025 / CWE-89 | 9.8 `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` | Sí, SAST (regla `juice-shop-sequelize-raw-query-interpolation`, `login.ts:34`) | Sí, regla H3-01 · Inyección SQL (CRS 942xxx) | Sí, 403 en modo On (H3, S4) | Consulta parametrizada con `bind` (IA, auditado) · commit *pendiente* | La PoC falla: 401 sin token, con WAF en DetectionOnly (2026-11-19 22:45) |
-| V-02 SQLi UNION | A05:2025 / CWE-89 | 7.5 `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N` | Sí, SAST (regla `juice-shop-sequelize-raw-query-interpolation`, `search.ts:23`) | Sí, regla H3-01 · Inyección SQL (CRS 942xxx) | Sí, 403 en modo On (H3, S4) | Consulta parametrizada con `replacements` (IA, auditado; se rechazó el codefix de referencia) · commit *pendiente* | La PoC falla: 0 filas, con WAF en DetectionOnly (2026-11-19 22:46); búsqueda legítima intacta |
+| V-01 SQLi en login | A05:2025 / CWE-89 | 9.8 `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` | Sí, SAST (regla `juice-shop-sequelize-raw-query-interpolation`, `login.ts:34`) | Sí, regla H3-01 · Inyección SQL (CRS 942xxx) | Sí, 403 en modo On (H3, S4) | Consulta parametrizada con `bind` (IA, auditado) · commit `288cb16ce` | La PoC falla: 401 sin token, con WAF en DetectionOnly (2026-11-19 22:45) |
+| V-02 SQLi UNION | A05:2025 / CWE-89 | 7.5 `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N` | Sí, SAST (regla `juice-shop-sequelize-raw-query-interpolation`, `search.ts:23`) | Sí, regla H3-01 · Inyección SQL (CRS 942xxx) | Sí, 403 en modo On (H3, S4) | Consulta parametrizada con `replacements` (IA, auditado; se rechazó el codefix de referencia) · commit `288cb16ce` | La PoC falla: 0 filas, con WAF en DetectionOnly (2026-11-19 22:46); búsqueda legítima intacta |
 
 ## 8. Notas
 

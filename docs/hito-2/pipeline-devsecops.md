@@ -174,19 +174,21 @@ El resultado se publica en el resumen del run (*Job Summary*) como una tabla con
 
 ### 4.5 Línea base vigente
 
-Medida en la primera corrida en modo reporte: [run 43358600554](https://github.com/josuemj/juice-shop/actions/runs/43358600554) (2026-11-13 03:23 UTC, commit `30f1d17a6`).
+**Vigente desde 2026-11-19 (H4), en modo `enforce`.** Se bajó la línea base (ratchet) con el [run 44679006959](https://github.com/josuemj/juice-shop/actions/runs/44679006959) (run #16, rama `hito-4`, gate en modo reporte, 6 jobs en verde), tras la corrección de V-01 y V-02. La línea base original de H2 se midió en la primera corrida en modo reporte: [run 43358600554](https://github.com/josuemj/juice-shop/actions/runs/43358600554) (2026-11-13 03:23 UTC, commit `30f1d17a6`).
 
-| Métrica | Línea base |
-|---|---:|
-| `sast.error` | 40 |
-| `sca.backend.critical` | 7 |
-| `sca.backend.high` | 20 |
-| `sca.frontend.critical` | 0 |
-| `sca.frontend.high` | 1 |
-| `dast.high` | 1 |
-| `dast.medium` | 4 |
+| Métrica | H2 (2026-11-12) | Run #16 (H4) | Vigente (2026-11-19) | Motivo del cambio |
+|---|---:|---:|---:|---|
+| `sast.error` | 40 | 36 | **36** | Baja por la corrección de V-01 (`routes/login.ts:34`) y V-02 (`routes/search.ts:23`) con consultas parametrizadas (commit `288cb16ce`) |
+| `sca.backend.critical` | 7 | 7 | 7 | Sin cambio |
+| `sca.backend.high` | 20 | 16 | **16** | Baja por la resolución de dependencias en el CI, **no por H4**: no se cambió ninguna dependencia. Se fija en 16 porque npm resuelve la versión más nueva compatible con los rangos de `package.json`: una subida posterior vendría de advisories nuevos, que es justo lo que el gate debe detectar |
+| `sca.frontend.critical` | 0 | 0 | 0 | Sin cambio |
+| `sca.frontend.high` | 1 | 1 | 1 | Sin cambio |
+| `dast.high` | 1 | 0 | **1** (se mantiene) | El 0 es una variación del spider de ZAP, que no encontró `/redirect` en esa corrida; **no es por H4**. El hallazgo sigue en el código y el spider lo encuentra en unas corridas y en otras no, así que bajar a 0 causaría fallos falsos en `enforce` |
+| `dast.medium` | 4 | 4 | 4 | Sin cambio |
 
-Métricas informativas de esa corrida:
+Métricas informativas del run #16 (H4) que se compararon con H2: `sast.warning` 39 (igual: sin hallazgos nuevos de severidad `WARNING`), `sast.scan-errors` 12 (igual: mismo alcance de análisis) y `sbom.components` 2743 (igual: sin dependencias nuevas).
+
+Métricas informativas de la corrida de H2 (run 43358600554):
 - `sast.warning` 39, `sast.info` 4, `sast.scan-errors` 12.
 - `sca.backend.moderate` 9, `sca.backend.low` 2, `sca.frontend.moderate` 2, `sca.frontend.low` 12.
 - `dast.low` 8, `dast.info` 4.
@@ -229,7 +231,7 @@ Métricas informativas de esa corrida:
 | 2026-11-12 | Línea base fijada (modo reporte, runner `ubuntu-24.04`): las 7 métricas iguales a la línea base | [run 43361246603](https://github.com/josuemj/juice-shop/actions/runs/43361246603) · `4f8deed16` |
 | 2026-11-12 | **Prueba del gate: regresión bloqueada.** Rama `test/gate-regresion`, modo `enforce` + SQLi canario en `routes/gateCanary.ts`. La regla `juice-shop-sequelize-raw-query-interpolation` la detecta (`gateCanary.ts:5`), `sast.error` sube de 40 a 41 y el job *Security gate* falla con "Regresión sast.error: 40 → 41". Los 5 escáneres terminan en verde: falla solo el gate | [run 43362314706](https://github.com/josuemj/juice-shop/actions/runs/43362314706) · `c3be2946c` |
 | 2026-11-12 | **Prueba del gate: vuelve a verde.** Misma rama, se elimina el canario. En modo `enforce` las 7 métricas vuelven a la línea base (`sast.error` 40) y los 6 jobs terminan en verde | [run 43363597319](https://github.com/josuemj/juice-shop/actions/runs/43363597319) · `b510a83fa` |
-| *pendiente* | Cambio a modo enforce | |
+| 2026-11-19 | **Cambio a modo enforce (H4).** Run #16 en la rama `hito-4` con el fix de V-01 y V-02 (`288cb16ce`), gate en modo reporte: 6 jobs en verde; `sast.error` 40 → 36, `sca.backend.high` 20 → 16 (CI, no H4), `dast.high` 1 → 0 (variación del spider, no H4), demás iguales. Se baja la línea base (`sast.error` 36, `sca.backend.high` 16; `dast.high` se mantiene en 1) y se pasa a `"mode": "enforce"` (§4.5). Run en `enforce`: *pendiente del siguiente push* | [run 44679006959](https://github.com/josuemj/juice-shop/actions/runs/44679006959) (medición) |
 
 ## 8. Trazabilidad con H1
 
