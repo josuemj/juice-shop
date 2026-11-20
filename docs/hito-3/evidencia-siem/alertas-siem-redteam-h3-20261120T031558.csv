@@ -1,0 +1,5 @@
+@timestamp,regla_SIEM,severidad,url,status,source_ip
+"2026-11-20T03:17:06.652Z","H3-01 · Inyección SQL detectada por el WAF","high","/rest/products/search?q=%27+OR+1%3d1--","403","172.19.0.1"
+"2026-11-20T03:17:06.656Z","H3-01 · Inyección SQL detectada por el WAF","high","/rest/user/login","403","172.19.0.1"
+"2026-11-20T03:17:06.657Z","H3-01 · Inyección SQL detectada por el WAF","high","/rest/products/search?q=qwert%27%29%29+UNION+SELECT+id%2c+email%2c+password%2c+%274%27%2c%275%27%2c%276%27%2c%277%27%2c%278%27%2c%279%27%2c%2710%27+FROM+Users--","403","172.19.0.1"
+"2026-11-20T03:17:09.680Z","H3-02 · XSS detectado por el WAF","medium","/rest/products/search?q=%3ciframe+src%3d%22javascript%3aalert%28%60xss%60%29%22%3e","403","172.19.0.1"
