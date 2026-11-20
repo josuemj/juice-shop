@@ -6,7 +6,7 @@ Registro del uso de IA en el Hito 4, según la guía de la UVG y el requisito de
 |---|---|
 | Fecha | 2026-11-19 |
 | Responsable | Juan Pablo Solís |
-| Herramientas | **Claude Code** (Anthropic) para generar y probar los fixes. **Claude** (claude.ai) para revisar el plan del H4 antes de pedir los cambios |
+| Herramientas | **Claude Code** (Anthropic) para generar y probar los fixes|
 | Vulnerabilidades | V-01 · SQLi en login (`routes/login.ts:34`) · V-02 · SQLi UNION en búsqueda (`routes/search.ts:23`) |
 | Clasificación | A05:2025 Injection · CWE-89 |
 | Plan de referencia | [`docs/hito-4/plan-h4.md`](../hito-4/plan-h4.md) |

@@ -80,8 +80,8 @@ BASE_URL=http://localhost:8080 EVID=red-team/evidencias/h4-retest-V-02 bash red-
 
 | PoC | Payload | Antes (H2) | Después (H4) | Evidencia |
 |---|---|---|---|---|
-| V-01 | `{"email":"' OR 1=1--","password":"x"}` en `POST /rest/user/login` | 200 + JWT de admin | **401, sin token** ✅ | [`red-team/evidencias/h4-retest-V-01/`](../../red-team/evidencias/h4-retest-V-01/) |
-| V-02 | `qwert')) UNION SELECT id, email, password, '4','5','6','7','8','9','10' FROM Users--` en `GET /rest/products/search?q=` | 200 + 25 usuarios | **200, 0 filas** ✅ | [`red-team/evidencias/h4-retest-V-02/`](../../red-team/evidencias/h4-retest-V-02/) |
+| V-01 | `{"email":"' OR 1=1--","password":"x"}` en `POST /rest/user/login` | 200 + JWT de admin | **401, sin token**  | [`red-team/evidencias/h4-retest-V-01/`](../../red-team/evidencias/h4-retest-V-01/) |
+| V-02 | `qwert')) UNION SELECT id, email, password, '4','5','6','7','8','9','10' FROM Users--` en `GET /rest/products/search?q=` | 200 + 25 usuarios | **200, 0 filas**  | [`red-team/evidencias/h4-retest-V-02/`](../../red-team/evidencias/h4-retest-V-02/) |
 
 Los mensajes de los scripts están escritos desde el punto de vista del atacante: en V-01, `FAIL: sin token` significa que **el ataque falló**; en V-02, `PASS: 0 filas` significa que **no se exfiltró nada**.
 
@@ -95,10 +95,10 @@ Un fix de seguridad que rompe la funcionalidad no es aceptable, y "0 filas" en V
 
 | Caso legítimo | Esperado | Resultado |
 |---|---|---|
-| Login con `admin@juice-sh.op` / `admin123` | 200 con token | **200** ✅ |
-| Búsqueda `q=apple` | Al menos 1 producto | **3 productos**: Apple Juice (1000ml), Apple Pomace, Pineapple Juice (1000ml) ✅ |
-| Búsqueda vacía `q=` (la que usa la tienda para cargar el catálogo) | Catálogo completo | **46 productos** ✅ |
-| Tienda en el navegador (`http://localhost:8080`) | Se ve el catálogo | Se ve "All Products" con sus productos ✅ |
+| Login con `admin@juice-sh.op` / `admin123` | 200 con token | **200**  |
+| Búsqueda `q=apple` | Al menos 1 producto | **3 productos**: Apple Juice (1000ml), Apple Pomace, Pineapple Juice (1000ml)  |
+| Búsqueda vacía `q=` (la que usa la tienda para cargar el catálogo) | Catálogo completo | **46 productos**  |
+| Tienda en el navegador (`http://localhost:8080`) | Se ve el catálogo | Se ve "All Products" con sus productos  |
 
 ![Control funcional: login, búsqueda y catálogo](img/h4-02-control-funcional.png)
 
@@ -108,11 +108,11 @@ Un fix de seguridad que rompe la funcionalidad no es aceptable, y "0 filas" en V
 
 | Verificación | Esperado | Resultado |
 |---|---|---|
-| Run de *DevSecOps* en la rama `hito-4` | 6 jobs en verde | **6 jobs en verde** ✅ (gate en modo reporte) · [run #16 (44679006959)](https://github.com/josuemj/juice-shop/actions/runs/44679006959) |
-| `sast.error` | Menor que la línea base (40); sin hallazgos en `login.ts:34` ni `search.ts:23` | **40 → 36** ✅, por la corrección de V-01 y V-02 |
+| Run de *DevSecOps* en la rama `hito-4` | 6 jobs en verde | **6 jobs en verde**  (gate en modo reporte) · [run #16 (44679006959)](https://github.com/josuemj/juice-shop/actions/runs/44679006959) |
+| `sast.error` | Menor que la línea base (40); sin hallazgos en `login.ts:34` ni `search.ts:23` | **40 → 36** , por la corrección de V-01 y V-02 |
 | Escaneo de secretos (`p/secrets`, `juice-shop-hardcoded-private-key`) | Sin hallazgos nuevos | `sast.error` no subió (40 → 36): no hay hallazgos nuevos de severidad `ERROR` que indiquen un secreto (ahí cuenta `juice-shop-hardcoded-private-key`). El dato es el conteo agregado, no una revisión hallazgo por hallazgo; las reglas de `p/secrets` con severidad `WARNING` cuentan en `sast.warning`, que sigue en 39 (igual que en H2): tampoco hay hallazgos nuevos de severidad `WARNING` |
 | Ratchet: `baseline.json` actualizado al nuevo `sast.error` | Commit con la justificación | `sast.error` 40 → 36 (fix de H4) y `sca.backend.high` 20 → 16 (resolución de dependencias en el CI, no H4). `dast.high` se mantiene en 1 aunque el run dio 0: es una variación del spider de ZAP con `/redirect`, que sigue en el código. Detalle en [`pipeline-devsecops.md` §4.5](../hito-2/pipeline-devsecops.md) · commit `a9e48e06a` |
-| Gate en `"mode": "enforce"` | Run final en verde | **"Modo: enforce · Resultado: PASA"** ✅, 6 jobs en verde, las 7 métricas controladas iguales a la línea base · [run #17 (44681610092)](https://github.com/josuemj/juice-shop/actions/runs/44681610092) |
+| Gate en `"mode": "enforce"` | Run final en verde | **"Modo: enforce · Resultado: PASA"** , 6 jobs en verde, las 7 métricas controladas iguales a la línea base · [run #17 (44681610092)](https://github.com/josuemj/juice-shop/actions/runs/44681610092) |
 | `dast.high` en el run #17 | 1 (línea base) | **1**: ZAP volvió a encontrar `/redirect` sin ningún cambio en el código (en el run #16 había dado 0). Con línea base 0, este run habría fallado en `enforce`; confirma la decisión de mantenerlo en 1. También variaron `dast.low` (7 → 8) y `dast.info` (4 → 6) entre los dos runs |
 
 ## 7. Matriz de trazabilidad (V-01 y V-02)
