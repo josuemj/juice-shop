@@ -15,6 +15,67 @@ filebeat.inputs:
           add_error_key: true
 
 processors:
+  # H3-04/H3-05: antes de enmascarar, decodifica el JWT de la petición
+  # (header Authorization o cookie token) y guarda en jwt.* SOLO metadatos:
+  # alg, orden del encabezado, id, rol, carrito (bid) y los NOMBRES de los
+  # claims de data. Nunca se guardan email, hash de contraseña ni firma.
+  # La firma no se verifica aquí: el SIEM no tiene (ni debe tener) la clave.
+  - script:
+      lang: javascript
+      id: extraer_metadatos_jwt
+      source: |
+        var TOKEN_AUTH = /^Bearer\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*)$/;
+        var TOKEN_COOKIE = /(?:^|;\s*)token=([A-Za-z0-9_-]+\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*)/;
+        var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+        // Goja (motor JS de Filebeat) no trae atob ni Buffer.
+        function base64url(s) {
+          var out = '', buf = 0, bits = 0;
+          for (var i = 0; i < s.length; i++) {
+            var idx = B64.indexOf(s.charAt(i));
+            if (idx < 0) throw 'base64url invalido';
+            buf = ((buf << 6) | idx) & 0xffffff;
+            bits += 6;
+            if (bits >= 8) { bits -= 8; out += String.fromCharCode((buf >> bits) & 0xff); }
+          }
+          return out;
+        }
+
+        function buscarToken(headers) {
+          var deCookie = null;
+          for (var nombre in headers) {
+            var n = nombre.toLowerCase();
+            var valor = String(headers[nombre]);
+            var m;
+            if (n === 'authorization' && (m = TOKEN_AUTH.exec(valor))) return m[1];
+            if (n === 'cookie' && (m = TOKEN_COOKIE.exec(valor))) deCookie = m[1];
+          }
+          return deCookie;
+        }
+
+        function process(event) {
+          var headers = event.Get('modsec.transaction.request.headers');
+          if (!headers) return;
+          var token = buscarToken(headers);
+          if (!token) return;
+          var partes = token.split('.');
+          try {
+            var h = JSON.parse(base64url(partes[0]));
+            var p = JSON.parse(base64url(partes[1]));
+            var data = (p && typeof p.data === 'object' && p.data) || {};
+            event.Put('jwt.decodificado', true);
+            event.Put('jwt.alg', String(h.alg));
+            event.Put('jwt.header_orden', Object.keys(h).join(','));
+            event.Put('jwt.firma_vacia', partes[2] === '');
+            event.Put('jwt.claims', Object.keys(data));
+            if (data.id !== undefined) event.Put('jwt.user_id', Number(data.id));
+            if (data.role !== undefined) event.Put('jwt.role', String(data.role));
+            if (p.bid !== undefined) event.Put('jwt.bid', Number(p.bid));
+          } catch (e) {
+            event.Put('jwt.decodificado', false);
+          }
+        }
+
   # RS-19 (H1): enmascara secretos antes de enviarlos a Elasticsearch.
   # De los JWT se conserva solo el encabezado (público, indica el "alg") para
   # poder detectar tokens manipulados sin guardar el token. Va antes de
