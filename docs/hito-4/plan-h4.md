@@ -45,8 +45,8 @@ El `criteria` ya está truncado a 200 chars arriba. El resto (bloques de detecci
 
 | Consulta | `q=""` | `q="apple"` | `q=<UNION de V-02>` |
 |---|---|---|---|
-| Codefix de referencia `LIKE '%:criteria%'` | 0 filas ❌ | 0 filas ❌ | 0 filas |
-| Fix elegido `LIKE :criteria` con `%…%` en el valor | todo el catálogo ✅ | Apple Juice ✅ | 0 filas ✅ |
+| Codefix de referencia `LIKE '%:criteria%'` | 0 filas  | 0 filas  | 0 filas |
+| Fix elegido `LIKE :criteria` con `%…%` en el valor | todo el catálogo  | Apple Juice  | 0 filas  |
 
 Si la IA propone el codefix de referencia, se rechaza y se documenta como **hallazgo de la auditoría** (ver abajo).
 
