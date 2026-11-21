@@ -1,0 +1,40 @@
+{
+  "rule_id": "jsb-h3-05-jwt-anomalo",
+  "name": "H3-05 · JWT no emitido por la aplicación",
+  "description": "Alerta cuando una petición trae un JWT que no tiene la forma de los que emite Juice Shop: alg distinto de RS256 o sin firma (alg:none), encabezado serializado en otro orden (la librería jsonwebtoken escribe typ,alg) o un claim data sin los campos que la app copia de la base de datos (createdAt). Cubre AC-07 del H1 y la PoC V-05 del Red Team (token admin firmado con la llave filtrada). La firma es válida, así que ni el WAF ni la app la rechazan: la detección es heurística, por la huella del emisor.",
+  "type": "query",
+  "language": "kuery",
+  "index": ["filebeat-*"],
+  "query": "event.dataset : \"modsecurity.audit\" and jwt.decodificado : true and (not jwt.alg : \"RS256\" or jwt.firma_vacia : true or not jwt.header_orden : \"typ,alg\" or not jwt.claims : \"createdAt\")",
+  "severity": "critical",
+  "risk_score": 99,
+  "interval": "1m",
+  "from": "now-2m",
+  "max_signals": 100,
+  "enabled": true,
+  "tags": ["H3", "Blue Team", "WAF", "JWT", "OWASP A07:2025", "CWE-347", "CWE-321"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0006", "name": "Credential Access", "reference": "https://attack.mitre.org/tactics/TA0006/" },
+      "technique": [
+        { "id": "T1606", "name": "Forge Web Credentials", "reference": "https://attack.mitre.org/techniques/T1606/" }
+      ]
+    },
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0004", "name": "Privilege Escalation", "reference": "https://attack.mitre.org/tactics/TA0004/" },
+      "technique": [
+        { "id": "T1078", "name": "Valid Accounts", "reference": "https://attack.mitre.org/techniques/T1078/" }
+      ]
+    }
+  ],
+  "references": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html"
+  ],
+  "false_positives": [
+    "Un cambio de versión de Juice Shop o de la librería jsonwebtoken puede cambiar el orden del encabezado o los claims de data; tras actualizar, revisar jwt.header_orden y jwt.claims de un login legítimo y ajustar la consulta.",
+    "Limitación (no falso positivo): un atacante que copie el orden del encabezado y todos los claims de un token real evade la regla. La firma con la llave filtrada solo se neutraliza rotando la llave (RS-04)."
+  ],
+  "note": "## Triage\n\n1. Ver qué condición disparó: `jwt.alg`, `jwt.firma_vacia`, `jwt.header_orden` y `jwt.claims`. Un token real tiene `RS256`, `typ,alg` y `createdAt` en los claims.\n2. Revisar `jwt.role` y `jwt.user_id`: `admin` / `1` sin un login previo de esa IP es escalamiento de privilegios.\n3. Buscar si la IP hizo login real: `source.ip : <ip> and url.original : \"/rest/user/login\" and http.response.status_code : 200`.\n4. `http.response.status_code : 200` en `/api/Users` o `/rest/admin/*` = la app aceptó el token. Contención: rotar la llave RSA (sale de `lib/insecurity.ts`) para invalidar todo token forjado."
+}

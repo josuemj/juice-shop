@@ -1,0 +1,32 @@
+{
+  "rule_id": "jsb-h3-04-idor-carrito",
+  "name": "H3-04 · IDOR: acceso a carrito ajeno",
+  "description": "Alerta cuando una petición GET /rest/basket/{id} pide un carrito distinto al que trae el propio JWT del usuario (claim bid). Cubre AC-06 del H1 y la PoC V-04 del Red Team. El CRS no ve este ataque porque la petición es legítima y no trae payload: la señal sale de comparar la URL con el token, que Filebeat decodifica en jwt.* (sin guardar el token).",
+  "type": "esql",
+  "language": "esql",
+  "query": "FROM filebeat-* METADATA _id, _index, _version\n| WHERE event.dataset == \"modsecurity.audit\" AND http.request.method == \"GET\" AND url.original LIKE \"/rest/basket/*\" AND jwt.bid IS NOT NULL\n| GROK url.original \"^/rest/basket/%{INT:carrito_solicitado:int}\"\n| WHERE carrito_solicitado IS NOT NULL AND carrito_solicitado != jwt.bid\n| KEEP @timestamp, _id, _index, _version, source.ip, user_agent.original, url.original, http.response.status_code, jwt.user_id, jwt.role, jwt.bid, carrito_solicitado",
+  "severity": "medium",
+  "risk_score": 47,
+  "interval": "1m",
+  "from": "now-2m",
+  "max_signals": 100,
+  "enabled": true,
+  "tags": ["H3", "Blue Team", "WAF", "IDOR", "OWASP A01:2025", "CWE-639"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0001", "name": "Initial Access", "reference": "https://attack.mitre.org/tactics/TA0001/" },
+      "technique": [
+        { "id": "T1190", "name": "Exploit Public-Facing Application", "reference": "https://attack.mitre.org/techniques/T1190/" }
+      ]
+    }
+  ],
+  "references": [
+    "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
+  ],
+  "false_positives": [
+    "Tokens re-emitidos por la app sin claim bid (al actualizar el perfil o comprar deluxe): la regla no los evalúa, así que es un punto ciego, no un falso positivo.",
+    "Un usuario que cerró sesión y entró con otra cuenta en la misma pestaña podría pedir una vez su carrito anterior (bid viejo en sessionStorage). Se distingue porque es un solo evento y sin enumeración de ids."
+  ],
+  "note": "## Triage\n\n1. Comparar `carrito_solicitado` con `jwt.bid` (el carrito que la app le asignó al usuario en el login).\n2. `http.response.status_code : 200` = la app entregó el carrito ajeno (IDOR explotado). 401/403/404 = intento sin éxito.\n3. Buscar enumeración: `jwt.user_id : <id> and url.original : /rest/basket/*`. Varios ids distintos en poco tiempo confirman el ataque.\n4. El WAF no puede bloquear esto (la petición es válida). La corrección es en el código: `routes/basket.ts` debe verificar que el carrito pertenece al usuario del JWT (RS-03)."
+}

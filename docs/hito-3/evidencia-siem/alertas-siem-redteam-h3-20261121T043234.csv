@@ -1,0 +1,8 @@
+@timestamp,regla_SIEM,severidad,url,status,source_ip
+"2026-11-21T04:33:09.359Z","H3-02 · XSS detectado por el WAF","medium","/rest/track-order/%3Ciframe%20src%3D%22javascript%3Aalert(%60xss%60)%22%3E","403","172.19.0.1"
+"2026-11-21T04:33:09.374Z","H3-01 · Inyección SQL detectada por el WAF","high","/rest/products/search?q=%27+OR+1%3d1--","403","172.19.0.1"
+"2026-11-21T04:33:09.381Z","H3-01 · Inyección SQL detectada por el WAF","high","/rest/user/login","403","172.19.0.1"
+"2026-11-21T04:33:09.386Z","H3-01 · Inyección SQL detectada por el WAF","high","/rest/products/search?q=qwert%27%29%29+UNION+SELECT+id%2c+email%2c+password%2c+%274%27%2c%275%27%2c%276%27%2c%277%27%2c%278%27%2c%279%27%2c%2710%27+FROM+Users--","403","172.19.0.1"
+"2026-11-21T04:33:09.397Z","H3-03 · Ráfaga de logins fallidos por IP","high","(umbral por IP)","","172.19.0.1"
+"2026-11-21T04:33:27.311Z","H3-04 · IDOR: acceso a carrito ajeno","medium","/rest/basket/1","200","172.19.0.1"
+"2026-11-21T04:33:30.282Z","H3-05 · JWT no emitido por la aplicación","critical","/api/Users/?size=3","200","172.19.0.1"

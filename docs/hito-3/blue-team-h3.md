@@ -20,8 +20,27 @@ Orden:
 | **H3-01 · Inyección SQL** | Query | `tags:"waf" and ...ruleId : 942*` | V-01 (SQLi login), V-02 (SQLi UNION) |
 | **H3-02 · XSS** | Query | `tags:"waf" and ...ruleId : 941*` | V-03 (XSS) |
 | **H3-03 · Ráfaga de logins por IP** | Threshold | ≥20 respuestas 401 en `/rest/user/login` por `source.ip` en 1 min | V-06 (fuerza bruta) |
+| **H3-04 · IDOR: carrito ajeno** | ES\|QL | `GET /rest/basket/{id}` con `id` ≠ `jwt.bid` (el carrito que el login asignó al usuario) | V-04 (IDOR carrito) |
+| **H3-05 · JWT no emitido por la app** | Query | `jwt.alg` ≠ RS256, sin firma, encabezado ≠ `typ,alg` o `jwt.claims` sin `createdAt` | V-05 (JWT forjado) |
 
 Verlas en Kibana: **☰ → Security → Rules → Detection rules (SIEM)**. Las alertas: **Security → Alerts**.
+
+H3-01 a H3-03 cubren el mínimo del enunciado (SQLi, XSS y ráfagas por IP). H3-04 y H3-05 se agregaron para que **todas** las PoC del Red Team tengan detección en el SIEM (columna "¿Lo detectó el SIEM?" de la matriz de trazabilidad).
+
+### 2.1 Ataques sin payload: el JWT en Filebeat
+
+V-04 y V-05 son peticiones válidas (200 OK) que el CRS no puede marcar: no hay nada malicioso en la URL ni en el cuerpo. La señal está en el **token**. Por eso [`filebeat.yml`](../../entorno-blue-team/filebeat/filebeat.yml) decodifica el JWT (header `Authorization` o cookie `token`) **antes** de enmascararlo y guarda en `jwt.*` solo metadatos:
+
+| Campo | Ejemplo legítimo | Token forjado (V-05) |
+|---|---|---|
+| `jwt.alg` | `RS256` | `RS256` |
+| `jwt.header_orden` | `typ,alg` (orden en que lo escribe la librería `jsonwebtoken`) | `alg,typ` |
+| `jwt.claims` | `id … createdAt, updatedAt, deletedAt` (la app copia la fila completa de la BD) | sin `createdAt`/`updatedAt`/`password` |
+| `jwt.role` / `jwt.user_id` / `jwt.bid` | `customer` / `26` / `7` | `admin` / `1` / `1` |
+
+Nunca se guarda el email, el hash de contraseña ni la firma, y el token en `modsec.*` sigue como `<encabezado>.[REDACTED]` (RS-19). La firma **no** se verifica: el SIEM no tiene ni debe tener la llave.
+
+**Límite de H3-05:** la detección es heurística (huella del emisor), no criptográfica. El H1 indicaba que un token firmado con la llave filtrada "no es detectable", y eso sigue siendo cierto si el atacante copia el orden del encabezado y todos los claims de un token real. La única contención definitiva es rotar la llave (RS-04, H4).
 
 ## 3. Falsos positivos documentados
 
@@ -47,7 +66,7 @@ Por cada falso positivo se escribió una exclusión en [`entorno-blue-team/waf/R
 
 Tras aplicar las exclusiones, un ataque de control de SQLi siguió disparando `942100` y uno de XSS siguió disparando la familia `941xxx`. Las exclusiones eliminan los falsos positivos sin afectar la detección de ataques reales.
 
-## 5. Evidencia (4 escenarios)
+## 5. Evidencia (5 escenarios)
 
 Cada escenario tiene un **marcador** en el `User-Agent` para filtrarlo exactamente en Kibana. Las horas están en UTC (en Kibana, ajustar el rango de tiempo a la ventana indicada; Kibana muestra hora local America/Guatemala = UTC−6).
 
@@ -95,13 +114,33 @@ WAF en On. Ataques SQLi y XSS: los tres reciben **403** y disparan las reglas de
 ![S4 modo On, ataques bloqueados con 403](img/s4-on-ataques-403.jpg)
 ![S4 alertas del SIEM](img/s4-on-alertas-siem.jpg)
 
+### S5 - Modo On - las 6 PoC del Red Team, detectadas por las 5 reglas
+
+WAF en On. Corrida completa de [`run-h3.sh`](../../red-team/poc/h3-waf/run-h3.sh): V-01 a V-03 reciben 403, y V-04 a V-06 pasan (el WAF no puede verlas), pero las alerta el SIEM.
+
+- **Marcador:** `redteam-h3-20261121T043234` · **KQL:** `user_agent.original : redteam-h3-20261121T043234*`
+- **Rango:** 2026-11-21 04:32:30 – 04:33:40 UTC (22:32:30 – 22:33:40 del 2026-11-20, hora local)
+- **Evidencia exportada:** [`alertas-siem-redteam-h3-20261121T043234.csv`](evidencia-siem/alertas-siem-redteam-h3-20261121T043234.csv) (alertas) y [`waf-redteam-h3-20261121T043234.csv`](evidencia-siem/waf-redteam-h3-20261121T043234.csv) (eventos del WAF, con `jwt.*`)
+
+| Ataque | Ruta | HTTP | Alerta SIEM |
+|---|---|---|---|
+| V-01 SQLi login | `/rest/user/login` | 403 | H3-01 · Inyección SQL |
+| V-02 SQLi UNION | `/rest/products/search` | 403 | H3-01 · Inyección SQL |
+| V-03 XSS | `/rest/track-order/<iframe…>` | 403 | H3-02 · XSS |
+| V-04 IDOR carrito | `/rest/basket/1` (su carrito es el 7) | 200 | **H3-04 · IDOR** (`carrito_solicitado`=1, `jwt.bid`=7) |
+| V-05 JWT forjado | `/api/Users/?size=3` | 200 | **H3-05 · JWT** (`header_orden`=`alg,typ`, sin `createdAt`, `role`=admin) |
+| V-06 Fuerza bruta | `/rest/user/login` ×30 | 401 | H3-03 · Ráfaga de logins |
+
+**Falsos positivos de H3-04/H3-05:** justo después se corrió el tráfico legítimo (`cliente-legitimo-20261120T223421`). Sus 4 peticiones autenticadas (carrito propio `/rest/basket/8`, `BasketItems`, reseña y feedback) llegaron con `typ,alg`, `createdAt` y `jwt.bid`=8, y generaron **0 alertas**.
+
 ## 6. Resultado
 
 | | DetectionOnly | Modo On |
 |---|---|---|
 | **Cliente legítimo, antes del ajuste** | 3 falsos positivos (S1) | (habría dado 403: no se llega a este punto) |
 | **Cliente legítimo, después del ajuste** | 0 falsos positivos (S2) | 0 bloqueos (S3) |
-| **Ataques SQLi/XSS** | detectados, pasan (DetectionOnly no bloquea) | **403 bloqueados + alertados** (S4) |
+| **Ataques SQLi/XSS** | detectados, pasan (DetectionOnly no bloquea) | **403 bloqueados + alertados** (S4, S5) |
+| **Ataques sin payload (IDOR, JWT, fuerza bruta)** | pasan, alertados | pasan (el WAF no puede verlos), **alertados** (S5); se corrigen en el código (H4) |
 
 El WAF quedó ajustado: bloquea los ataques del perímetro sin estorbar al cliente legítimo, y el SIEM genera alertas con hora, IP, ruta y regla.
 
@@ -111,7 +150,9 @@ El WAF quedó ajustado: bloquea los ataques del perímetro sin estorbar al clien
 # 1. Entorno  /entorno-blue-team
 docker compose up -d && ./verificar.sh
 
-# 2. Reglas de detección en Kibana
+# 2. Reglas de detección en Kibana (también declara el mapeo jwt.*)
+#    Si el entorno ya estaba levantado antes del cambio en filebeat.yml:
+#    cd entorno-blue-team && docker compose restart filebeat
 bash blue-team/reglas-siem/cargar-reglas.sh
 
 # 3. Tráfico legítimo

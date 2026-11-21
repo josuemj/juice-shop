@@ -17,6 +17,28 @@ KIBANA="http://localhost:5601"
 API="$KIBANA/api/detection_engine/rules"
 fallos=0
 
+# Campos jwt.* que agrega Filebeat (H3-04/H3-05). Se declaran antes de cargar
+# las reglas porque la regla ES|QL falla ("Unknown column") si el campo aún no
+# existe en ningún índice, por ejemplo antes de la primera petición con token.
+code=$(curl -s -o /tmp/respuesta-regla.json -w '%{http_code}' -u "elastic:$ELASTIC_PASSWORD" \
+  -H 'Content-Type: application/json' -X PUT "http://localhost:9200/filebeat-*/_mapping" --data-binary '{
+    "properties": { "jwt": { "properties": {
+      "decodificado": { "type": "boolean" },
+      "alg":          { "type": "keyword" },
+      "header_orden": { "type": "keyword" },
+      "firma_vacia":  { "type": "boolean" },
+      "claims":       { "type": "keyword" },
+      "user_id":      { "type": "long" },
+      "role":         { "type": "keyword" },
+      "bid":          { "type": "long" }
+    } } } }')
+if [ "$code" = "200" ]; then
+  echo "  [OK]    mapeo jwt.* en filebeat-*"
+else
+  echo "  [AVISO] mapeo jwt.* (HTTP $code): $(head -c 300 /tmp/respuesta-regla.json)"
+  echo "          Si aún no hay datos en filebeat-*, generar tráfico y volver a correr este script."
+fi
+
 for regla in h3-*.json; do
   rule_id=$(sed -n 's/.*"rule_id": *"\([^"]*\)".*/\1/p' "$regla")
   code=$(curl -s -o /tmp/respuesta-regla.json -w '%{http_code}' -u "elastic:$ELASTIC_PASSWORD" \
