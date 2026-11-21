@@ -1,0 +1,14 @@
+# Informe final · Matriz de trazabilidad
+
+Una fila por vulnerabilidad explotada por el Red Team (H2), con lo que hizo cada control en H2, H3 y H4: el pipeline, el SIEM, el WAF y la corrección en el código.
+
+## 1. Matriz
+
+| Hallazgo | OWASP / CWE | CVSS v3.1 | ¿Lo detectó el pipeline? | ¿Lo detectó el SIEM? | ¿Lo bloqueó el WAF? | Corrección | Re-prueba |
+|---|---|---|---|---|---|---|---|
+| **V-01** SQLi en el login → bypass a admin | A05:2025 / CWE-89 | **9.8** `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` | **Sí**, SAST: `juice-shop-sequelize-raw-query-interpolation` y `express-sequelize-injection` en `routes/login.ts:34` | **Sí**, H3-01 · Inyección SQL (CRS 942xxx) | **Sí**, 403 en modo On | Consulta parametrizada con `bind` (IA, auditado) · commit `288cb16ce` | **La PoC falla**: 401 sin token (2026-11-19 22:45) |
+| **V-02** SQLi UNION en la búsqueda → exfiltración de usuarios | A05:2025 / CWE-89 | **7.5** `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N` | **Sí**, SAST: las mismas dos reglas en `routes/search.ts:23` | **Sí**, H3-01 · Inyección SQL (CRS 942xxx) | **Sí**, 403 en modo On | Consulta parametrizada con `replacements` (IA, auditado; se rechazó el codefix de referencia) · commit `288cb16ce` | **La PoC falla**: 0 filas, búsqueda legítima intacta (2026-11-19 22:46) |
+| **V-03** XSS (DOM en la búsqueda; en H3, reflejado en rastreo de pedidos) | A05:2025 / CWE-79 | **6.1** `AV:N/AC:L/PR:N/UI:R/S:C/C:L/I:L/A:N` | **Sí**, SAST: `juice-shop-angular-bypass-security-trust` en `track-result.component.ts:49` y `search-result.component.ts:113,146` | **Sí**, H3-02 · XSS (CRS 941xxx) | **Sí**, 403 en modo On (vector `track-order`)¹ | Sin corrección en el código | — |
+| **V-04** IDOR de carrito → lectura del carrito de otro usuario | A01:2025 / CWE-639 | **6.5** `AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:N/A:N` | **No**: el SAST no detecta la falta de control de dueño² | **Sí**, H3-04 · IDOR (`carrito_solicitado` ≠ `jwt.bid`) | **No**: es una petición legítima (200) | Sin corrección en el código | — |
+| **V-05** JWT forjado con la llave filtrada → admin | A07:2025 / CWE-347, CWE-321 | **9.8** `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H` | **Sí**, SAST: `juice-shop-hardcoded-private-key` en `lib/insecurity.ts:21` (y `hardcoded-jwt-secret`, `:54`) | **Sí**, H3-05 · JWT no emitido por la app (heurística)³ | **No**: la firma es válida (200) | Sin corrección en el código | — |
+| **V-06** Login sin límite de intentos → fuerza bruta | A07:2025 / CWE-307 | **7.5** `AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N` | **No**: ningún control del pipeline revisa el rate limiting | **Sí**, H3-03 · Ráfaga de logins por IP (≥20 × 401 en 1 min) | **No**: 401=30, 403=0, 429=0 | Sin corrección en el código | — |
